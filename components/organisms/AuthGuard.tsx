@@ -1,11 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { firebaseAuth } from "@/lib/firebase";
+import { firebaseAuth, firebaseDb } from "@/lib/firebase";
 import { doc, getDoc, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
-import { firebaseDb, firebaseRtdb } from "@/lib/firebase";
-import { ref, onValue, onDisconnect, set as rtdbSet, serverTimestamp as rtdbServerTimestamp } from "firebase/database";
 
 type AuthGuardProps = {
   children: React.ReactNode;
@@ -22,7 +20,6 @@ export default function AuthGuard({
   const [checking, setChecking] = useState(true);
   const [allowed, setAllowed] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const presenceListener = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     const unsubscribe = firebaseAuth.onAuthStateChanged((user) => {
@@ -34,38 +31,39 @@ export default function AuthGuard({
           router.replace(redirectTo);
           return;
         }
+
         setCurrentUserId(user.uid);
-        if (!allowedRole) {
-          setAllowed(true);
-          setChecking(false);
+
+        const onlineUpdate = async () => {
+          const isActive = document.visibilityState === "visible" && document.hasFocus();
           try {
             await setDoc(
               doc(firebaseDb, "all_users", user.uid),
-              { online: true, lastSeen: serverTimestamp() },
+              { online: isActive, lastSeen: serverTimestamp() },
               { merge: true }
             );
           } catch {
             // ignore
           }
+        };
+
+        if (!allowedRole) {
+          setAllowed(true);
+          setChecking(false);
+          onlineUpdate();
           return;
         }
+
         try {
           const userSnap = await getDoc(doc(firebaseDb, "all_users", user.uid));
           const role = userSnap.exists() ? (userSnap.data() as any).role : "";
           if (role === allowedRole) {
             setAllowed(true);
             setChecking(false);
-            try {
-              await setDoc(
-                doc(firebaseDb, "all_users", user.uid),
-                { online: true, lastSeen: serverTimestamp() },
-                { merge: true }
-              );
-            } catch {
-              // ignore
-            }
+            onlineUpdate();
             return;
           }
+
           setAllowed(false);
           setChecking(false);
           if (role === "client") {
@@ -83,11 +81,13 @@ export default function AuthGuard({
       };
       run();
     });
+
     return () => unsubscribe();
   }, [router, redirectTo, allowedRole]);
 
   useEffect(() => {
     if (!currentUserId) return;
+
     const setOnlineStatus = async (online: boolean) => {
       try {
         await updateDoc(doc(firebaseDb, "all_users", currentUserId), {
@@ -99,57 +99,34 @@ export default function AuthGuard({
       }
     };
 
-    const handleVisibility = () => {
-      if (document.visibilityState === "hidden") {
-        setOnlineStatus(false);
-      } else {
-        setOnlineStatus(true);
-      }
+    const refreshStatus = () => {
+      const isActive = document.visibilityState === "visible" && document.hasFocus();
+      setOnlineStatus(isActive);
     };
 
-    const handleBeforeUnload = () => {
-      setOnlineStatus(false);
-    };
+    const handleVisibilityChange = () => refreshStatus();
+    const handleFocus = () => refreshStatus();
+    const handleBlur = () => setOnlineStatus(false);
+    const handleBeforeUnload = () => setOnlineStatus(false);
+    const handlePageHide = () => setOnlineStatus(false);
 
+    window.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener("blur", handleBlur);
     window.addEventListener("beforeunload", handleBeforeUnload);
-    document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("pagehide", handlePageHide);
+
+    refreshStatus();
+    const interval = window.setInterval(refreshStatus, 30000);
 
     return () => {
+      window.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("blur", handleBlur);
       window.removeEventListener("beforeunload", handleBeforeUnload);
-      document.removeEventListener("visibilitychange", handleVisibility);
-    };
-  }, [currentUserId]);
-
-  useEffect(() => {
-    if (!currentUserId) return;
-    const userStatusDatabaseRef = ref(firebaseRtdb, `/status/${currentUserId}`);
-    const isOfflineForDatabase = {
-      state: "offline",
-      last_changed: rtdbServerTimestamp(),
-    };
-    const isOnlineForDatabase = {
-      state: "online",
-      last_changed: rtdbServerTimestamp(),
-    };
-
-    if (presenceListener.current) {
-      presenceListener.current();
-      presenceListener.current = null;
-    }
-
-    const connectedRef = ref(firebaseRtdb, ".info/connected");
-    const unsubscribe = onValue(connectedRef, (snap) => {
-      if (snap.val() === false) return;
-      onDisconnect(userStatusDatabaseRef).set(isOfflineForDatabase);
-      rtdbSet(userStatusDatabaseRef, isOnlineForDatabase);
-    });
-    presenceListener.current = unsubscribe;
-
-    return () => {
-      if (presenceListener.current) {
-        presenceListener.current();
-        presenceListener.current = null;
-      }
+      window.removeEventListener("pagehide", handlePageHide);
+      window.clearInterval(interval);
+      setOnlineStatus(false);
     };
   }, [currentUserId]);
 

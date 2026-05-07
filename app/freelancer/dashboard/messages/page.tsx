@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import FreelancerSidebar from "@/components/molecules/FreelancerSidebar";
 import MessagesList from "@/components/organisms/MessagesList";
 import ChatView from "@/components/organisms/ChatView";
-import { firebaseAuth, firebaseDb, firebaseRtdb } from "@/lib/firebase";
+import { firebaseAuth, firebaseDb } from "@/lib/firebase";
 import {
   addDoc,
   collection,
@@ -20,7 +20,6 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
-import { onValue, ref as rtdbRef } from "firebase/database";
 
 interface MessageListItem {
   id: string;
@@ -125,7 +124,15 @@ export default function MessagesPage() {
     return `${size.toFixed(idx === 0 ? 0 : 2)} ${units[idx]}`;
   };
 
+  const isPresenceActive = (userData: any) => {
+    if (!userData?.online) return false;
+    const lastSeen = userData.lastSeen;
+    const timestamp = lastSeen?.toDate ? lastSeen.toDate().getTime() : lastSeen?.seconds ? lastSeen.seconds * 1000 : null;
+    return timestamp !== null && Date.now() - timestamp < 90000;
+  };
+
   useEffect(() => {
+    let unsubscribeConversations: (() => void) | null = null;
     const unsubscribeAuth = firebaseAuth.onAuthStateChanged((user) => {
       if (!user) {
         setConversations([]);
@@ -133,92 +140,109 @@ export default function MessagesPage() {
         setCurrentUserId(null);
         return;
       }
+
       setCurrentUserId(user.uid);
       const conversationsQuery = query(
         collection(firebaseDb, "conversations"),
         where("freelancerId", "==", user.uid)
       );
-      const unsubscribe = onSnapshot(conversationsQuery, async (snapshot) => {
-        const items = await Promise.all(snapshot.docs.map(async (docSnap) => {
-          const data = docSnap.data() as any;
-          const clientId = data.clientId ?? "";
-          let clientName = data.clientName ?? "";
-          let clientAvatarUrl = data.clientAvatarUrl ?? "";
 
-          if (clientId && (!clientName || !clientAvatarUrl)) {
-            try {
-              const [clientSnap, allUsersSnap] = await Promise.all([
-                getDoc(doc(firebaseDb, "clients", clientId)),
-                getDoc(doc(firebaseDb, "all_users", clientId)),
-              ]);
-              const c = clientSnap.exists() ? (clientSnap.data() as any) : {};
-              const a = allUsersSnap.exists() ? (allUsersSnap.data() as any) : {};
-              if (!clientName) {
-                const composedName = `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim();
-                clientName = c.fullName ?? a.fullName ?? composedName ?? a.name ?? "Client";
+      unsubscribeConversations = onSnapshot(conversationsQuery, async (snapshot) => {
+        const items = await Promise.all(
+          snapshot.docs.map(async (docSnap) => {
+            const data = docSnap.data() as any;
+            const clientId = data.clientId ?? "";
+            let clientName = data.clientName ?? "";
+            let clientAvatarUrl = data.clientAvatarUrl ?? "";
+
+            if (clientId && (!clientName || !clientAvatarUrl)) {
+              try {
+                const [clientSnap, allUsersSnap] = await Promise.all([
+                  getDoc(doc(firebaseDb, "clients", clientId)),
+                  getDoc(doc(firebaseDb, "all_users", clientId)),
+                ]);
+                const c = clientSnap.exists() ? (clientSnap.data() as any) : {};
+                const a = allUsersSnap.exists() ? (allUsersSnap.data() as any) : {};
+                if (!clientName) {
+                  const composedName = `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim();
+                  clientName = c.fullName ?? a.fullName ?? composedName ?? a.name ?? "Client";
+                }
+                if (!clientAvatarUrl) clientAvatarUrl = c.avatarUrl ?? a.avatarUrl ?? "";
+              } catch {
+                // keep fallback values
               }
-              if (!clientAvatarUrl) clientAvatarUrl = c.avatarUrl ?? a.avatarUrl ?? "";
-            } catch {
-              // keep current fallback values
             }
-          }
 
-          return {
-            id: docSnap.id,
-            jobId: data.jobId ?? "",
-            jobTitle: data.jobTitle ?? "",
-            clientId,
-            clientName: clientName || "Client",
-            freelancerId: data.freelancerId ?? "",
-            freelancerName: data.freelancerName ?? "",
-            clientAvatarUrl,
-            freelancerAvatarUrl: data.freelancerAvatarUrl ?? "",
-            canFreelancerMessage: !!data.canFreelancerMessage,
-            lastMessage: data.lastMessage ?? {},
-            unread: data.unread ?? {},
-            otherOnline: presenceMap[clientId] ?? false,
-            paymentStatus: data.paymentStatus ?? "unfunded",
-            paymentAmountSats: Number(data.paymentAmountSats ?? 0),
-            paymentTotalAmountSats: Number(data.paymentTotalAmountSats ?? 0),
-            paymentInstallments: Number(data.paymentInstallments ?? 0),
-            paymentCurrentInstallment: Number(data.paymentCurrentInstallment ?? 0),
-            paymentPaidAmountSats: Number(data.paymentPaidAmountSats ?? 0),
-            paymentRequest: data.paymentRequest ?? "",
-            paymentHash: data.paymentHash ?? "",
-            workStatus: data.workStatus ?? "not_started",
-            submissionMessage: data.submissionMessage ?? "",
-            submissionLink: data.submissionLink ?? "",
-            submissionAttachment: data.submissionAttachment ?? null,
-            submissionReviewDueAt: data.submissionReviewDueAt,
-            revisionMessage: data.revisionMessage ?? "",
-          } as Conversation;
-        }));
+            return {
+              id: docSnap.id,
+              jobId: data.jobId ?? "",
+              jobTitle: data.jobTitle ?? "",
+              clientId,
+              clientName: clientName || "Client",
+              freelancerId: data.freelancerId ?? "",
+              freelancerName: data.freelancerName ?? "",
+              clientAvatarUrl,
+              freelancerAvatarUrl: data.freelancerAvatarUrl ?? "",
+              canFreelancerMessage: !!data.canFreelancerMessage,
+              lastMessage: data.lastMessage ?? {},
+              unread: data.unread ?? {},
+              // otherOnline removed — derived live from presenceMap in messageList
+              paymentStatus: data.paymentStatus ?? "unfunded",
+              paymentAmountSats: Number(data.paymentAmountSats ?? 0),
+              paymentTotalAmountSats: Number(data.paymentTotalAmountSats ?? 0),
+              paymentInstallments: Number(data.paymentInstallments ?? 0),
+              paymentCurrentInstallment: Number(data.paymentCurrentInstallment ?? 0),
+              paymentPaidAmountSats: Number(data.paymentPaidAmountSats ?? 0),
+              paymentRequest: data.paymentRequest ?? "",
+              paymentHash: data.paymentHash ?? "",
+              workStatus: data.workStatus ?? "not_started",
+              submissionMessage: data.submissionMessage ?? "",
+              submissionLink: data.submissionLink ?? "",
+              submissionAttachment: data.submissionAttachment ?? null,
+              submissionReviewDueAt: data.submissionReviewDueAt,
+              revisionMessage: data.revisionMessage ?? "",
+            } as Conversation;
+          })
+        );
+
         setConversations(items);
 
         const activeIds = new Set(
-          snapshot.docs.map((docSnap) => (docSnap.data() as any).clientId ?? "").filter(Boolean)
+          items.map((conv) => conv.clientId).filter(Boolean)
         );
 
         Object.keys(presenceUnsubs.current).forEach((uid) => {
           if (!activeIds.has(uid)) {
-            presenceUnsubs.current[uid]();
+            presenceUnsubs.current[uid]?.();
             delete presenceUnsubs.current[uid];
+            setPresenceMap((prev) => {
+              const next = { ...prev };
+              delete next[uid];
+              return next;
+            });
           }
         });
 
         activeIds.forEach((uid) => {
           if (presenceUnsubs.current[uid]) return;
-          const statusRef = rtdbRef(firebaseRtdb, `/status/${uid}`);
-          const unsubscribePresence = onValue(statusRef, (snap) => {
-            const isOnline = snap.exists() && snap.val()?.state === "online";
-            setPresenceMap((prev) => ({ ...prev, [uid]: isOnline }));
+          const unsubscribePresence = onSnapshot(doc(firebaseDb, "all_users", uid), (snap) => {
+            const data = snap.exists() ? (snap.data() as any) : {};
+            setPresenceMap((prev) => ({
+              ...prev,
+              [uid]: isPresenceActive(data),
+            }));
           });
           presenceUnsubs.current[uid] = unsubscribePresence;
         });
       });
-      return () => unsubscribe();
     });
-    return () => unsubscribeAuth();
+
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeConversations) unsubscribeConversations();
+      Object.values(presenceUnsubs.current).forEach((unsub) => unsub());
+      presenceUnsubs.current = {};
+    };
   }, []);
 
   useEffect(() => {
@@ -301,7 +325,7 @@ export default function MessagesPage() {
         unreadCount,
       };
     });
-  }, [conversations, currentUserId]);
+  }, [conversations, currentUserId, presenceMap]);
 
   const selectedConversation = conversations.find((c) => c.id === selectedChat) ?? null;
   const selectedMessage = selectedConversation

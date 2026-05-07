@@ -548,39 +548,73 @@ export default function FreelancerContractsContent() {
             <>
               {submittedJobs.length ? (
                 submittedJobs.map((job) => (
+                  // <div
+                  //   key={job.id}
+                  //   className="rounded-[12px] break-words break-all border border-[#EAE7E2] bg-white p-4 shadow-[0_6px_16px_rgba(0,0,0,0.04)]"
+                  // >
+                  //   <div className="flex items-start justify-between gap-3">
+                  //     <div>
+                  //       <div className="text-[14px] font-semibold text-[#1a1a1a]">{job.description}</div>
+                  //       <div className="text-[12px] text-[#9e9690]">
+                  //         Contract: {contracts.find(c => c.id === job.contractId)?.title || 'Unknown'}
+                  //       </div>
+                  //       {job.link && (
+                  //         <div className="mt-2 text-[12px] text-[#6b6762] break-words  break-all">
+                  //           Link: <a href={job.link} target="_blank" rel="noopener noreferrer" className="text-[#8C4F00] underline">{job.link}</a>
+                  //         </div>
+                  //       )}
+                  //       {job.attachment && (
+                  //         <div className="mt-2 text-[12px] text-[#6b6762] break-all">
+                  //           Attachment: <a href={job.attachment.url} target="_blank" rel="noopener noreferrer" className="text-[#8C4F00] underline">{job.attachment.name}</a>
+                  //         </div>
+                  //       )}
+                  //     </div>
+                  //     <div className="text-right">
+                  //       <div className={`text-[10px] uppercase tracking-[0.1em] font-semibold ${
+                  //         job.status === 'approved' ? 'text-green-600' : job.status === 'rejected' ? 'text-red-600' : 'text-[#F5A623]'
+                  //       }`}>
+                  //         {job.status}
+                  //       </div>
+                  //       <div className="mt-2 text-[10px] text-[#6b6762]">
+                  //         {job.submittedAt.toLocaleDateString()}
+                  //       </div>
+                  //     </div>
+                  //   </div>
+                  // </div>
                   <div
-                    key={job.id}
-                    className="rounded-[12px] border border-[#EAE7E2] bg-white p-4 shadow-[0_6px_16px_rgba(0,0,0,0.04)]"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-[14px] font-semibold text-[#1a1a1a]">{job.description}</div>
-                        <div className="text-[12px] text-[#9e9690]">
-                          Contract: {contracts.find(c => c.id === job.contractId)?.title || 'Unknown'}
-                        </div>
-                        {job.link && (
-                          <div className="mt-2 text-[12px] text-[#6b6762]">
-                            Link: <a href={job.link} target="_blank" rel="noopener noreferrer" className="text-[#8C4F00] underline">{job.link}</a>
-                          </div>
-                        )}
-                        {job.attachment && (
-                          <div className="mt-2 text-[12px] text-[#6b6762]">
-                            Attachment: <a href={job.attachment.url} target="_blank" rel="noopener noreferrer" className="text-[#8C4F00] underline">{job.attachment.name}</a>
-                          </div>
-                        )}
+                  key={job.id}
+                  className="rounded-[12px] border border-[#EAE7E2] bg-white p-4 shadow-[0_6px_16px_rgba(0,0,0,0.04)]"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-[14px] font-semibold text-[#1a1a1a] break-words">{job.description}</div>
+                      <div className="text-[12px] text-[#9e9690] break-words">
+                        Contract: {contracts.find(c => c.id === job.contractId)?.title || 'Unknown'}
                       </div>
-                      <div className="text-right">
-                        <div className={`text-[10px] uppercase tracking-[0.1em] font-semibold ${
-                          job.status === 'approved' ? 'text-green-600' : job.status === 'rejected' ? 'text-red-600' : 'text-[#F5A623]'
-                        }`}>
-                          {job.status}
+                      {job.link && (
+                        <div className="mt-2 text-[12px] text-[#6b6762] break-all">
+                          Link: <a href={job.link} target="_blank" rel="noopener noreferrer" className="text-[#8C4F00] underline break-all">{job.link}</a>
                         </div>
-                        <div className="mt-2 text-[10px] text-[#6b6762]">
-                          {job.submittedAt.toLocaleDateString()}
+                      )}
+                      {job.attachment && (
+                        <div className="mt-2 text-[12px] text-[#6b6762] break-all">
+                          Attachment: <a href={job.attachment.url} target="_blank" rel="noopener noreferrer" className="text-[#8C4F00] underline break-all">{job.attachment.name}</a>
                         </div>
+                      )}
+                    </div>
+                    <div className="text-right flex flex-col gap-2">
+                      <div className={`text-[10px] uppercase tracking-[0.1em] font-semibold ${
+                        job.status === 'approved' ? 'text-green-600' : job.status === 'rejected' ? 'text-red-600' : 'text-[#F5A623]'
+                      }`}>
+                        {job.status}
                       </div>
+                      <div className="text-[10px] text-[#6b6762]">
+                        {job.submittedAt.toLocaleDateString()}
+                      </div>
+                      
                     </div>
                   </div>
+                </div>
                 ))
               ) : (
                 <div className="rounded-[12px] border border-[#EAE7E2] bg-white p-4 text-[12px] text-[#6b6762]">
