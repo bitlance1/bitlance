@@ -528,22 +528,10 @@ export default function ChatView({
           </Button>
         </div>
 
-        {/* Typing indicator - optional */}
-        <div className="mt-1 sm:mt-2 text-[11px] sm:text-xs text-gray-400 min-h-[16px] sm:min-h-[18px]">
-          {!canSend ? (
-            <span>Messaging is locked until the client initiates or accepts the proposal.</span>
-          ) : isSending ? (
-            <span>Sending...</span>
-          ) : message.sender.isOnline ? (
-            <span>{message.sender.name} is online</span>
-          ) : null}
-        </div>
+        
       </div>
 
-      {/* Footer note */}
-      <div className="text-center text-[10px] sm:text-[11px] text-gray-400 py-1.5 sm:py-2 tracking-wide bg-[#FCF9F7CC]">
-        PAYMENTS ARE SECURED VIA BITLANCE ESCROW
-      </div>
+     
     </div>
   );
 }

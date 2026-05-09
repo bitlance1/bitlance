@@ -378,7 +378,7 @@ export default function ClientOverviewContent() {
         </div>
       </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         {dynamicMetrics.map((metric) => (
           <DashboardMetricCard
             key={metric.label}

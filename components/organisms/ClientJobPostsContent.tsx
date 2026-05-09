@@ -80,6 +80,8 @@ export default function ClientJobPostsContent() {
   const [skillInput, setSkillInput] = useState("");
   const [postSkills, setPostSkills] = useState<string[]>([]);
   const [postCategory, setPostCategory] = useState("");
+  const [clientAvatarUrl, setClientAvatarUrl] = useState("");
+  const [clientName, setClientName] = useState("");
   const [isPublishing, setIsPublishing] = useState(false);
   const [isEditingJob, setIsEditingJob] = useState(false);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
@@ -155,6 +157,30 @@ export default function ClientJobPostsContent() {
           setJobsError("Unable to load job posts right now.");
         }
       );
+
+      const loadClientProfile = async () => {
+        try {
+          const [clientSnap, allUsersSnap] = await Promise.all([
+            getDoc(doc(firebaseDb, "clients", user.uid)),
+            getDoc(doc(firebaseDb, "all_users", user.uid)),
+          ]);
+
+          const clientData = clientSnap.exists() ? (clientSnap.data() as any) : {};
+          const allUsersData = allUsersSnap.exists() ? (allUsersSnap.data() as any) : {};
+
+          setClientAvatarUrl(
+            clientData.avatarUrl ?? allUsersData.avatarUrl ?? user.photoURL ?? ""
+          );
+          setClientName(
+            clientData.fullName ?? allUsersData.fullName ?? user.displayName ?? "Client"
+          );
+        } catch {
+          setClientAvatarUrl(user.photoURL ?? "");
+          setClientName(user.displayName ?? "Client");
+        }
+      };
+
+      loadClientProfile();
     });
 
     return () => {
@@ -366,6 +392,8 @@ export default function ClientJobPostsContent() {
               <ClientJobPostCard
                 key={job.id}
                 {...job}
+                clientAvatarUrl={clientAvatarUrl}
+                clientName={clientName}
                 isSelected={job.id === selectedJobId}
                 onSelect={() => {
                   setSelectedJobId(job.id);

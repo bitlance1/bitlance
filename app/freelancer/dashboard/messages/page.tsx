@@ -478,7 +478,7 @@ export default function MessagesPage() {
       <div className="flex">
         <FreelancerSidebar active="/freelancer/dashboard/messages" />
 
-        <div className="flex-1 mt-[50px] lg:ml-0">
+        <div className="flex-1 mt-[50px] md:mt-[0px] lg:ml-0">
           <div className="h-screen flex pt-4 md:pt-0">
             <div
               className={`

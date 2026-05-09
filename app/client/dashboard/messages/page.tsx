@@ -602,7 +602,7 @@ export default function ClientMessagesPage() {
       <div className="flex">
         <ClientSidebar active="/client/dashboard/messages" />
 
-        <div className="flex-1 mt-[50px] lg:ml-0 pt-[55px] md:pt-0">
+        <div className="flex-1 mt-0 md:mt-[0px] lg:ml-0 pt-[42px] md:pt-0">
           <div className="h-screen flex pt-4 md:pt-0">
             <div
               className={`
