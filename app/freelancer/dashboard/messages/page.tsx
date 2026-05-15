@@ -32,6 +32,8 @@ interface MessageListItem {
   lastMessage: {
     text: string;
     timestamp: string;
+    /** Raw epoch milliseconds for sorting and smart date display */
+    createdAtMs?: number;
     isRead: boolean;
   };
   unreadCount: number;
@@ -359,27 +361,40 @@ export default function MessagesPage() {
 
   const messageList = useMemo<MessageListItem[]>(() => {
     if (!currentUserId) return [];
-    return conversations.map((conv) => {
-      const otherName = conv.clientName || "Client";
-      const lastText = conv.lastMessage?.text ?? "Start the conversation";
-      const lastTime = formatTimestamp(conv.lastMessage?.createdAt) || "";
-      const unreadCount = conv.unread?.[currentUserId] ?? 0;
-      return {
-        id: conv.id,
-        sender: {
-          name: otherName,
-          avatar: conv.clientAvatarUrl || "/assets/avatar.png",
-          profileUrl: conv.clientId ? `/client/public/${conv.clientId}` : "",
-          isOnline: !!presenceMap[conv.clientId],
-        },
-        lastMessage: {
-          text: lastText,
-          timestamp: lastTime,
-          isRead: unreadCount === 0,
-        },
-        unreadCount,
-      };
-    });
+    return conversations
+      .map((conv) => {
+        const otherName = conv.clientName || "Client";
+        const lastText = conv.lastMessage?.text ?? "Start the conversation";
+        const lastTime = formatTimestamp(conv.lastMessage?.createdAt) || "";
+        const unreadCount = conv.unread?.[currentUserId] ?? 0;
+        const rawCreatedAt = conv.lastMessage?.createdAt;
+        const createdAtMs = rawCreatedAt?.seconds
+          ? rawCreatedAt.seconds * 1000
+          : rawCreatedAt
+            ? new Date(rawCreatedAt).getTime() || undefined
+            : undefined;
+        return {
+          id: conv.id,
+          sender: {
+            name: otherName,
+            avatar: conv.clientAvatarUrl || "/assets/avatar.png",
+            profileUrl: conv.clientId ? `/client/public/${conv.clientId}` : "",
+            isOnline: !!presenceMap[conv.clientId],
+          },
+          lastMessage: {
+            text: lastText,
+            timestamp: lastTime,
+            createdAtMs,
+            isRead: unreadCount === 0,
+          },
+          unreadCount,
+        };
+      })
+      .sort((a, b) => {
+        const aMs = a.lastMessage.createdAtMs ?? 0;
+        const bMs = b.lastMessage.createdAtMs ?? 0;
+        return bMs - aMs;
+      });
   }, [conversations, currentUserId, presenceMap]);
 
   const selectedConversation = conversations.find((c) => c.id === selectedChat) ?? null;

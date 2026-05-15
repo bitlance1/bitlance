@@ -12,6 +12,8 @@ interface Message {
   lastMessage: {
     text: string;
     timestamp: string;
+    /** Raw epoch milliseconds for smart date formatting */
+    createdAtMs?: number;
     isRead: boolean;
   };
   unreadCount: number;
@@ -23,7 +25,49 @@ interface MessageItemProps {
   onClick: () => void;
 }
 
+/**
+ * Smart date label:
+ * - Same calendar day  → "2:45 PM"
+ * - Yesterday          → "Yesterday"
+ * - Within last 7 days → "Monday", "Tuesday", …
+ * - Older              → "May 12" or "Dec 3, 2024"
+ */
+function formatSmartDate(ms: number): string {
+  const now = new Date();
+  const date = new Date(ms);
+
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfYesterday = new Date(startOfToday.getTime() - 86400000);
+  const startOf7DaysAgo = new Date(startOfToday.getTime() - 6 * 86400000);
+
+  if (date >= startOfToday) {
+    // Today — show time only
+    return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  }
+
+  if (date >= startOfYesterday) {
+    return 'Yesterday';
+  }
+
+  if (date >= startOf7DaysAgo) {
+    // Within last 7 days — show weekday name
+    return date.toLocaleDateString(undefined, { weekday: 'long' });
+  }
+
+  // Older — show "May 12" or "May 12, 2023" if different year
+  const sameYear = date.getFullYear() === now.getFullYear();
+  return date.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    ...(sameYear ? {} : { year: 'numeric' }),
+  });
+}
+
 export default function MessageItem({ message, isSelected, onClick }: MessageItemProps) {
+  const displayTime = message.lastMessage.createdAtMs
+    ? formatSmartDate(message.lastMessage.createdAtMs)
+    : message.lastMessage.timestamp;
+
   return (
     <div
       onClick={onClick}
@@ -62,8 +106,8 @@ export default function MessageItem({ message, isSelected, onClick }: MessageIte
             <h3 className="font-bold text-sm text-[#1a1a1a] truncate">
               {message.sender.name}
             </h3>
-            <span className="text-xs text-gray-400 flex-shrink-0">
-              {message.lastMessage.timestamp}
+            <span className="text-xs text-gray-400 flex-shrink-0 ml-2">
+              {displayTime}
             </span>
           </div>
 
@@ -71,7 +115,9 @@ export default function MessageItem({ message, isSelected, onClick }: MessageIte
             text-xs sm:text-sm truncate
             ${message.lastMessage.isRead ? 'text-gray-500' : 'text-[#1a1a1a] font-medium'}
           `}>
-            {message.lastMessage.text.length > 40 ? message.lastMessage.text.slice(0, 40) + '...' : message.lastMessage.text}
+            {message.lastMessage.text.length > 40
+              ? message.lastMessage.text.slice(0, 40) + '…'
+              : message.lastMessage.text}
           </p>
         </div>
 

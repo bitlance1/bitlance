@@ -13,6 +13,8 @@ interface Message {
   lastMessage: {
     text: string;
     timestamp: string;
+    /** Raw epoch milliseconds — used for smart date label and sorting */
+    createdAtMs?: number;
     isRead: boolean;
   };
   unreadCount: number;
