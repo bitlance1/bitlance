@@ -8,7 +8,7 @@ import ClientContractCard from "@/components/molecules/ClientContractCard";
 import ClientProposalCard from "@/components/molecules/ClientProposalCard";
 import { firebaseAuth, firebaseDb } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
-import { collection, doc, getDoc, getDocs, limit, onSnapshot, query, where } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, limit, onSnapshot, query, where, orderBy } from "firebase/firestore";
 
 const METRICS = [
   { label: "Active Contracts", value: "0", change: "None yet", tone: "neutral" as const },
@@ -45,13 +45,16 @@ type Contract = {
 
 type ProposalItem = {
   id: string;
+  freelancerId: string;
   name: string;
   title: string;
   rate: string;
   cover: string;
   rating: number;
   availability: string;
+  status?: string;
 };
+
 type JobStatus = "Open" | "In Review" | "Paused";
 
 type JobPost = {
@@ -68,8 +71,6 @@ type JobPost = {
   jobType?: string;
   createdAt?: any;
 };
-
-const PROPOSALS: { [key: string]: ProposalItem[] } = {};
 
 const formatDate = (value: any) => {
   if (!value) return "-";
@@ -102,6 +103,8 @@ export default function ClientOverviewContent() {
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [contractsLoading, setContractsLoading] = useState(true);
   const [contractsError, setContractsError] = useState("");
+  const [proposals, setProposals] = useState<ProposalItem[]>([]);
+  const [proposalsLoading, setProposalsLoading] = useState(false);
   const freelancerNameCache = useRef<Record<string, string>>({});
 
   const selectedContract = useMemo(
@@ -128,7 +131,44 @@ export default function ClientOverviewContent() {
     [selectedJobId, latestJobs]
   );
 
-  const proposals = useMemo(() => PROPOSALS[selectedJobId] ?? [], [selectedJobId]);
+  // Fetch proposals for the selected job in real-time
+  useEffect(() => {
+    if (!selectedJobId) {
+      setProposals([]);
+      return;
+    }
+    setProposalsLoading(true);
+    const proposalsQuery = query(
+      collection(firebaseDb, "proposals"),
+      where("jobId", "==", selectedJobId)
+    );
+    const unsubscribe = onSnapshot(
+      proposalsQuery,
+      (snapshot) => {
+        const items: ProposalItem[] = snapshot.docs.map((docSnap) => {
+          const data = docSnap.data() as any;
+          return {
+            id: docSnap.id,
+            freelancerId: data.freelancerId ?? "",
+            name: data.freelancerName ?? "Freelancer",
+            title: data.freelancerTitle ?? "Professional",
+            rate: data.rate ?? "-",
+            cover: data.cover ?? "",
+            rating: typeof data.rating === "number" ? data.rating : 5,
+            availability: data.availability ?? "Available",
+            status: data.status ?? "submitted",
+          };
+        });
+        setProposals(items);
+        setProposalsLoading(false);
+      },
+      () => {
+        setProposals([]);
+        setProposalsLoading(false);
+      }
+    );
+    return () => unsubscribe();
+  }, [selectedJobId]);
 
   const formatBudget = (value: string) =>
     value?.trim()
@@ -368,9 +408,9 @@ export default function ClientOverviewContent() {
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-            <Button size="sm" variant="outline" className="rounded-full w-full sm:w-auto">
+            {/* <Button size="sm" variant="outline" className="rounded-full w-full sm:w-auto">
               View Reports
-            </Button>
+            </Button> */}
             <Button 
               size="sm" 
               className="rounded-full w-full sm:w-auto" 
@@ -531,14 +571,8 @@ export default function ClientOverviewContent() {
                 {selectedContract.nextMilestone}
               </div>
             </div>
-            <div className="mt-5 flex flex-wrap gap-2">
-              <Button size="sm" variant="outline" className="rounded-full">
-                View Contract
-              </Button>
-              <Button size="sm" className="rounded-full">
-                Approve Milestone
-              </Button>
-            </div>
+
+
           </div>
         </div>
       ) : null}
@@ -600,22 +634,18 @@ export default function ClientOverviewContent() {
               </div>
             ) : null}
 
-            <div className="mt-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="mt-5">
               <div className="text-[11px] text-[#6b6762]">
                 Review candidates and select the freelancers you want to hire.
-              </div>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2">
-                <span className="text-[11px] text-[#9e9690]">
-                  {Object.values(selectedProposals).filter(Boolean).length} selected
-                </span>
-                <Button size="sm" variant="outline" className="rounded-full w-full sm:w-auto">
-                  View Details
-                </Button>
               </div>
             </div>
 
             <div className="mt-4 flex flex-col gap-3">
-              {proposals.length > 0 ? ( 
+              {proposalsLoading ? (
+                <div className="rounded-[12px] border border-[#EAE7E2] bg-[#FAF8F5] p-4 text-[12px] text-[#6b6762]">
+                  Loading proposals...
+                </div>
+              ) : proposals.length > 0 ? (
                 proposals.map((proposal) => (
                   <ClientProposalCard
                     key={proposal.id}
@@ -630,8 +660,8 @@ export default function ClientOverviewContent() {
                   />
                 ))
               ) : (
-                <div className="text-[12px] text-[#9e9690] text-center py-8">
-                  No proposals yet.
+                <div className="rounded-[12px] border border-[#EAE7E2] bg-[#FAF8F5] p-4 text-[12px] text-[#9e9690] text-center py-8">
+                  No proposals yet for this job.
                 </div>
               )}
             </div>

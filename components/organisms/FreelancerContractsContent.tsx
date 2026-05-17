@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Button from "@/components/atoms/Button";
-import { Briefcase, ClipboardCheck, FileText } from "lucide-react";
+import { Briefcase, Calendar, ClipboardCheck, FileText } from "lucide-react";
 import { firebaseAuth, firebaseDb } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { addDoc, collection, doc, getDoc, getDocs, increment, limit, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where } from "firebase/firestore";
@@ -66,6 +66,8 @@ type Contract = {
 type SubmittedJob = {
   id: string;
   contractId: string;
+  milestoneIndex?: number;
+  milestoneTitle?: string;
   description: string;
   link?: string;
   attachment?: {
@@ -276,15 +278,18 @@ export default function FreelancerContractsContent() {
     try {
       const attachment = selectedFile ? await uploadContractFile(selectedFile) : null;
       const contractUrl = `/client/dashboard/contracts?contract=${selectedContract.id}`;
-      const notificationText = `Work for "${selectedContract.title}" has been submitted for review. [Check it out](${contractUrl})`;
+      const notificationText = `Work for "${selectedContract.title}" — Milestone ${nextMilestoneIndex}: ${(milestone as any)?.title || (milestone as any)?.name || `Milestone ${nextMilestoneIndex}`} has been submitted for review. [Check it out](${contractUrl})`;
       const messageText = notificationText;
 
       // Add to submitted_jobs collection
+      const milestoneTitle = (milestone as any)?.title || (milestone as any)?.name || `Milestone ${nextMilestoneIndex}`;
       const submissionData = {
         contractId: selectedContract.id,
         clientId: selectedContract.clientId,
         freelancerId: selectedContract.freelancerId,
         contractTitle: selectedContract.title,
+        milestoneIndex: nextMilestoneIndex,
+        milestoneTitle,
         description: workMessage || "Work submitted for review.",
         link: workLink || "",
         attachment: attachment,
@@ -293,7 +298,6 @@ export default function FreelancerContractsContent() {
       };
 
       // Update contract workStatus
-      const nextMilestoneIndex = (selectedContract.paymentReleasedInstallments ?? 0) + 1;
       const updatedMilestones = (selectedContract.milestones ?? []).map((item: any, index) => {
         const itemIndex = Number(item.index ?? index + 1);
         if (itemIndex !== nextMilestoneIndex) return item;
@@ -346,7 +350,8 @@ export default function FreelancerContractsContent() {
       setSelectedFile(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (error) {
-      setSubmissionError("Unable to submit work. Please try again.");
+      console.error("Submit work error:", error);
+      setSubmissionError(error instanceof Error ? error.message : "Unable to submit work. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -455,6 +460,8 @@ export default function FreelancerContractsContent() {
             return {
               id: docSnap.id,
               contractId: data.contractId ?? "",
+              milestoneIndex: typeof data.milestoneIndex === "number" ? data.milestoneIndex : undefined,
+              milestoneTitle: data.milestoneTitle ?? undefined,
               description: data.description ?? "",
               link: data.link ?? "",
               attachment: data.attachment ?? null,
@@ -629,334 +636,335 @@ export default function FreelancerContractsContent() {
 
   return (
     <section className="w-full">
-      <div className="flex items-center gap-6 px-2">
+
+      {/* ── TABS ─────────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-6 border-b border-[#EAE7E2] px-1">
         {[
-          { id: "contracts", label: "Contracts", alert: false },
-          { id: "submitted", label: "Submitted jobs", alert: needsAttentionCount > 0 },
+          { id: "active",   label: "Active",        count: activeContracts.length },
+          { id: "ongoing",  label: "Ongoing",        count: ongoingContracts.length },
+          { id: "finished", label: "Finished",       count: finishedContracts.length },
+          { id: "submitted", label: "Submitted Jobs", count: submittedJobs.length, alert: needsAttentionCount > 0 },
         ].map((tab) => (
           <button
             key={tab.id}
             type="button"
-            onClick={() => setActiveTab(tab.id as "contracts" | "submitted")}
-            className={`relative py-3 text-[13px] font-medium transition ${
-              activeTab === tab.id ? "text-[#1a1a1a]" : "text-[#8f8780] hover:text-[#1a1a1a]"
+            onClick={() => {
+              if (tab.id === "submitted") {
+                setActiveTab("submitted");
+              } else {
+                setActiveTab("contracts");
+                setView(tab.id as "active" | "ongoing" | "finished");
+              }
+            }}
+            className={`relative py-3 text-[13px] font-semibold transition whitespace-nowrap ${
+              (tab.id === "submitted" ? activeTab === "submitted" : activeTab === "contracts" && view === tab.id)
+                ? "text-[#F7931A]"
+                : "text-[#8f8780] hover:text-[#1a1a1a]"
             }`}
           >
-            <span className="inline-flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5">
               {tab.label}
-              {tab.alert ? (
+              {tab.count > 0 && (
+                <span className="rounded-full bg-[#F5F3EF] px-1.5 py-0.5 text-[9px] font-bold text-[#8f8780]">
+                  {tab.count}
+                </span>
+              )}
+              {tab.alert && (
                 <span className="inline-flex h-2 w-2 rounded-full bg-[#F7931A]" />
-              ) : null}
+              )}
             </span>
-            {activeTab === tab.id ? (
-              <span className="absolute bottom-[-1px] left-0 h-[2px] w-full rounded-full bg-[#F7931A]" />
-            ) : null}
+            {(tab.id === "submitted" ? activeTab === "submitted" : activeTab === "contracts" && view === tab.id) && (
+              <span className="absolute bottom-0 left-0 h-[2px] w-full rounded-full bg-[#F7931A]" />
+            )}
           </button>
         ))}
       </div>
 
-      <div className="mt-2 rounded-[14px] border border-[#EAE7E2] bg-white p-3 shadow-[0_8px_22px_rgba(0,0,0,0.04)]">
-        {activeTab === 'contracts' && (
-          <div className="grid gap-2">
-            <div className="grid gap-2 sm:grid-cols-3">
-              {contractStatusFilters.map((filter) => (
-                <button
-                  key={filter.id}
-                  type="button"
-                  onClick={() => setView(filter.id)}
-                  className={`flex h-10 items-center justify-between rounded-[10px] border px-4 text-left text-[12px] font-semibold transition ${
-                    view === filter.id
-                      ? "border-[#F7931A] bg-[#FFF4E6] text-[#8C4F00]"
-                      : "border-[#EFECE7] bg-[#FAF8F5] text-[#4E4B48] hover:border-[#F2D8AA]"
-                  }`}
-                >
-                  <span>{filter.label}</span>
-                  <span className="rounded-full bg-white px-2 py-0.5 text-[10px] text-[#8f8780]">
-                    {filter.count}
-                  </span>
-                </button>
-              ))}
+      {/* ── CONTRACTS GRID ───────────────────────────────────────────── */}
+      {activeTab === "contracts" && (
+        <div className="mt-5">
+          {loading ? (
+            <div className="rounded-[12px] border border-[#EAE7E2] bg-white p-6 text-[12px] text-[#6b6762]">
+              Loading contracts...
             </div>
-          </div>
-        )}
-        <div className="mt-4 grid grid-cols-1 gap-4">
-          {activeTab === 'contracts' ? (
-            <>
-              {loading ? (
-                <div className="rounded-[12px] border border-[#EAE7E2] bg-white p-4 text-[12px] text-[#6b6762]">
-                  Loading contracts...
-                </div>
-              ) : errorMessage ? (
-                <div className="rounded-[12px] border border-[#EAE7E2] bg-[#FFF6F2] p-4 text-[12px] text-[#8C4F00]">
-                  {errorMessage}
-                </div>
-              ) : visibleContracts.length ? (
-                <div className="overflow-hidden rounded-[12px] border border-[#EAE7E2] bg-white">
-                  <div className="hidden grid-cols-[1.4fr_1fr_0.9fr_1.2fr_auto] gap-3 border-b border-[#EFECE7] bg-[#FAF8F5] px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#9e9690] md:grid">
-                    <span>Project</span>
-                    <span>Client</span>
-                    <span>Escrow</span>
-                    <span>Next milestone</span>
-                    <span></span>
-                  </div>
-                  {visibleContracts.map((contract) => {
-                    const escrowLabel =
-                      isFinishedContract(contract)
-                        ? "Finished"
-                        : isEscrowContract(contract)
-                          ? "Funded"
-                          : contract.paymentStatus === "invoice_created"
-                            ? "Invoice sent"
-                            : "Not funded";
-                    return (
-                      <button
-                        key={contract.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedId(contract.id);
-                          setIsModalOpen(true);
-                        }}
-                        className="grid w-full gap-3 border-b border-[#F1EEE9] px-4 py-4 text-left transition last:border-b-0 hover:bg-[#FFF9F0] md:grid-cols-[1.4fr_1fr_0.9fr_1.2fr_auto] md:items-center"
-                      >
-                        <div className="min-w-0">
-                          <div className="truncate text-[14px] font-semibold text-[#1a1a1a]">{contract.title}</div>
-                          <div className="mt-1 text-[11px] text-[#9e9690] md:hidden">Client: {contract.clientName}</div>
-                        </div>
-                        <div className="hidden truncate text-[12px] text-[#6b6762] md:block">{contract.clientName}</div>
-                        <div>
-                          <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] ${
-                            escrowLabel === "Funded"
-                              ? "bg-[#E6F4EA] text-[#2E7D32]"
-                              : escrowLabel === "Finished"
-                                ? "bg-[#F5EFE8] text-[#8C4F00]"
-                                : "bg-[#FFF4E6] text-[#8C4F00]"
-                          }`}>
-                            {escrowLabel}
-                          </span>
-                        </div>
-                        <div className="min-w-0 break-words text-[12px] text-[#6b6762] [overflow-wrap:anywhere]">
-                          <span className="md:hidden font-semibold text-[#9e9690]">Next: </span>
-                          {contract.nextMilestone}
-                        </div>
-                        <div className="flex items-center justify-between gap-3 md:justify-end">
-                          <span className="text-[12px] font-semibold text-[#8C4F00]">{contract.budget}</span>
-                          <span className="text-[11px] font-semibold text-[#1a1a1a]">Open</span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="flex min-h-[172px] flex-col items-center justify-center rounded-[12px] bg-white px-5 py-10 text-center">
-                  <FileText className="h-11 w-11 text-[#F7931A]" />
-                  <div className="mt-3 text-[15px] font-semibold text-[#1a1a1a]">No {view === "finished" ? "finished jobs" : `${view} contracts`} yet</div>
-                  <Button
-                    size="sm"
-                    className="mt-4 rounded-full bg-[#F7931A] text-[#1a1a1a] hover:bg-[#E9850F]"
-                    onClick={() => router.push("/freelancer/dashboard/job-feed")}
-                  >
-                    <Briefcase className="mr-2 h-4 w-4" />
-                    Find Tasks
-                  </Button>
-                </div>
-              )}
-            </>
-          ) : (
-            <>
-              {submittedJobs.length ? (
-                submittedJobs.map((job) => (
-                  // <div
-                  //   key={job.id}
-                  //   className="rounded-[12px] break-words break-all border border-[#EAE7E2] bg-white p-4 shadow-[0_6px_16px_rgba(0,0,0,0.04)]"
-                  // >
-                  //   <div className="flex items-start justify-between gap-3">
-                  //     <div>
-                  //       <div className="text-[14px] font-semibold text-[#1a1a1a]">{job.description}</div>
-                  //       <div className="text-[12px] text-[#9e9690]">
-                  //         Contract: {contracts.find(c => c.id === job.contractId)?.title || 'Unknown'}
-                  //       </div>
-                  //       {job.link && (
-                  //         <div className="mt-2 text-[12px] text-[#6b6762] break-words  break-all">
-                  //           Link: <a href={job.link} target="_blank" rel="noopener noreferrer" className="text-[#8C4F00] underline">{job.link}</a>
-                  //         </div>
-                  //       )}
-                  //       {job.attachment && (
-                  //         <div className="mt-2 text-[12px] text-[#6b6762] break-all">
-                  //           Attachment: <a href={job.attachment.url} target="_blank" rel="noopener noreferrer" className="text-[#8C4F00] underline">{job.attachment.name}</a>
-                  //         </div>
-                  //       )}
-                  //     </div>
-                  //     <div className="text-right">
-                  //       <div className={`text-[10px] uppercase tracking-[0.1em] font-semibold ${
-                  //         job.status === 'approved' ? 'text-green-600' : job.status === 'rejected' ? 'text-red-600' : 'text-[#F5A623]'
-                  //       }`}>
-                  //         {job.status}
-                  //       </div>
-                  //       <div className="mt-2 text-[10px] text-[#6b6762]">
-                  //         {job.submittedAt.toLocaleDateString()}
-                  //       </div>
-                  //     </div>
-                  //   </div>
-                  // </div>
+          ) : errorMessage ? (
+            <div className="rounded-[12px] border border-[#EAE7E2] bg-[#FFF6F2] p-4 text-[12px] text-[#8C4F00]">
+              {errorMessage}
+            </div>
+          ) : visibleContracts.length ? (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {visibleContracts.map((contract) => {
+                const statusLabel = isFinishedContract(contract)
+                  ? "Finished"
+                  : isEscrowContract(contract)
+                    ? "Ongoing"
+                    : "Active";
+                const statusColor =
+                  statusLabel === "Finished"
+                    ? "bg-[#E6F4EA] text-[#2E7D32]"
+                    : statusLabel === "Ongoing"
+                      ? "bg-[#EFF6FF] text-[#1D4ED8]"
+                      : "bg-[#FFF4E6] text-[#8C4F00]";
+
+                const amountSats = contract.paymentTotalAmountSats ?? 0;
+                const amountLabel = amountSats > 0
+                  ? `${amountSats.toLocaleString()} sats`
+                  : contract.budget ?? "—";
+
+                const clientInitials = (contract.clientName ?? "C")
+                  .split(" ")
+                  .filter(Boolean)
+                  .slice(0, 2)
+                  .map((p: string) => p[0]?.toUpperCase())
+                  .join("");
+
+                return (
                   <div
-                  key={job.id}
-                  className="w-full min-w-0 rounded-[12px] border border-[#EAE7E2] bg-white p-3 shadow-[0_6px_16px_rgba(0,0,0,0.04)] transition hover:border-[#F2D8AA] sm:p-4"
-                >
-                  <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0 flex-1">
-                      <div className="break-words text-[13px] font-semibold leading-5 text-[#1a1a1a] [overflow-wrap:anywhere] sm:text-[14px]">{job.description}</div>
-                      <div className="mt-1 break-words text-[12px] text-[#9e9690] [overflow-wrap:anywhere]">
-                        Contract: {contracts.find(c => c.id === job.contractId)?.title || 'Unknown'}
+                    key={contract.id}
+                    className="flex flex-col rounded-[14px] border border-[#EAE7E2] bg-white p-4 shadow-[0_4px_16px_rgba(0,0,0,0.05)] transition hover:shadow-[0_6px_20px_rgba(0,0,0,0.09)]"
+                  >
+                    {/* Card header */}
+                    <div className="flex items-start gap-3">
+                      {/* Client avatar */}
+                      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#E8E2D9] border border-[#DDD8D0]">
+                        {(contract as any).clientAvatarUrl ? (
+                          <img src={(contract as any).clientAvatarUrl} alt={contract.clientName} className="h-full w-full object-cover" />
+                        ) : (
+                          <span className="text-[11px] font-black text-[#8C4F00]">{clientInitials}</span>
+                        )}
                       </div>
-                      {job.link && (
-                        <div className="mt-2 max-w-full text-[12px] leading-5 text-[#6b6762]">
-                          <span className="font-semibold text-[#9e9690]">Link: </span>
-                          <a href={job.link} target="_blank" rel="noopener noreferrer" className="text-[#8C4F00] underline break-all [overflow-wrap:anywhere]">{job.link}</a>
-                        </div>
-                      )}
-                      {job.attachment && (
-                        <div className="mt-2 max-w-full text-[12px] leading-5 text-[#6b6762]">
-                          <span className="font-semibold text-[#9e9690]">Attachment: </span>
-                          <a href={job.attachment.url} target="_blank" rel="noopener noreferrer" className="text-[#8C4F00] underline break-all [overflow-wrap:anywhere]">{job.attachment.name}</a>
-                        </div>
-                      )}
+
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[9px] font-black uppercase tracking-[0.14em] text-[#999]">
+                          {contract.clientName}
+                        </p>
+                        <h3 className="mt-0.5 text-[15px] font-black text-[#1a1a1a] leading-tight truncate">
+                          {contract.title}
+                        </h3>
+                      </div>
+
+                      {/* Status badge */}
+                      <span className={`flex-shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] ${statusColor}`}>
+                        {statusLabel}
+                      </span>
                     </div>
-                    <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-[104px] sm:items-end sm:text-right">
-                      <div className={`inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.1em] sm:justify-end ${
-                        job.status === 'approved' ? 'text-green-600' : job.status === 'rejected' ? 'text-red-600' : 'text-[#F5A623]'
-                      }`}>
-                        {job.status === 'rejected' ? (
-                          <span className="inline-flex h-2 w-2 rounded-full bg-[#F7931A]" />
-                        ) : null}
-                        {job.status}
-                      </div>
-                      <div className="text-[10px] text-[#6b6762]">
-                        {job.submittedAt.toLocaleDateString()}
-                      </div>
-                      <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-col">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedSubmissionId(job.id)}
-                          className="rounded-full border border-[#EAE7E2] px-3 py-2 text-[10px] font-semibold text-[#6b6762] transition hover:bg-[#F7F4F0] sm:py-1"
-                        >
-                          View Details
-                        </button>
-                        {job.status !== 'approved' ? (
-                        <button
-                          type="button"
-                          onClick={() => openEditSubmission(job)}
-                          className="rounded-full bg-[#FFF4E6] px-3 py-2 text-[10px] font-semibold text-[#8C4F00] sm:py-1"
-                        >
-                          {job.status === 'rejected' ? 'Adjust' : 'Edit'}
-                        </button>
-                        ) : null}
-                      </div>
-                       
+
+                    {/* Contract value */}
+                    <div className="mt-4 flex items-center justify-between rounded-[10px] bg-[#F5F3EF] px-3 py-2.5">
+                      <span className="text-[12px] text-[#888]">Contract Value</span>
+                      <span className="text-[13px] font-black text-[]">{amountLabel}</span>
                     </div>
+
+                    {/* Next milestone */}
+                    {contract.nextMilestone && contract.nextMilestone !== "-" && (
+                      <div className="mt-3 flex items-center gap-2 text-[12px] text-[#555]">
+                        <Calendar size={13} className="flex-shrink-0 text-[#999]" />
+                        <span>Next Milestone: <strong>{contract.nextMilestone}</strong></span>
+                        {contract.dueDate && contract.dueDate !== "-" && (
+                          <span className="ml-auto flex-shrink-0 font-bold text-[#F7931A]">{contract.dueDate}</span>
+                        )}
+                      </div>
+                    )}
+
+                    {/* View Details button */}
+                    <button
+                      type="button"
+                      onClick={() => { setSelectedId(contract.id); setIsModalOpen(true); }}
+                      className="mt-4 w-full rounded-[10px] bg-gradient-to-r from-orange-600 to-orange-400 py-3 text-[12px] font-black uppercase tracking-[0.1em] text-white transition hover:bg-[#0f1a26]"
+                    >
+                      View Details
+                    </button>
                   </div>
-                </div>
-                ))
-              ) : (
-                <div className="flex min-h-[172px] flex-col items-center justify-center rounded-[12px] bg-white px-5 py-10 text-center">
-                  <ClipboardCheck className="h-10 w-10 text-[#F7931A]" />
-                  <div className="mt-3 text-[15px] font-semibold text-[#1a1a1a]">No submitted jobs yet</div>
-                </div>
-              )}
-            </>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex min-h-[200px] flex-col items-center justify-center rounded-[14px] border border-dashed border-[#EAE7E2] bg-white px-5 py-10 text-center">
+              <FileText className="h-10 w-10 text-[#F7931A]" />
+              <p className="mt-3 text-[14px] font-semibold text-[#1a1a1a]">
+                No {view === "finished" ? "finished jobs" : `${view} contracts`} yet
+              </p>
+              <Button
+                size="sm"
+                className="mt-4 rounded-full"
+                onClick={() => router.push("/freelancer/dashboard/job-feed")}
+              >
+                <Briefcase className="mr-2 h-4 w-4" />
+                Find Tasks
+              </Button>
+            </div>
           )}
         </div>
-      </div>
+      )}
+
+      {/* ── SUBMITTED JOBS ───────────────────────────────────────────── */}
+      {activeTab === "submitted" && (
+        <div className="mt-5">
+          {submittedJobs.length ? (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {submittedJobs.map((job) => {
+                const contract = contracts.find(c => c.id === job.contractId);
+                const statusLabel = job.status === "approved" ? "Approved" : job.status === "rejected" ? "Changes Requested" : "Pending Review";
+                const statusColor = job.status === "approved" ? "bg-[#E6F4EA] text-[#2E7D32]" : job.status === "rejected" ? "bg-[#FFF5F5] text-[#B91C1C]" : "bg-[#FFF4E6] text-[#8C4F00]";
+                return (
+                  <div key={job.id} className="flex flex-col rounded-[14px] border border-[#EAE7E2] bg-white p-4 shadow-[0_4px_16px_rgba(0,0,0,0.05)] transition hover:shadow-[0_6px_20px_rgba(0,0,0,0.09)]">
+
+                    {/* Card header */}
+                    <div className="flex items-start gap-3">
+                      {/* Icon */}
+                      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-[#FFF4E6] border border-[#F7931A30]">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#F7931A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                          <polyline points="14 2 14 8 20 8"/>
+                          <line x1="16" y1="13" x2="8" y2="13"/>
+                          <line x1="16" y1="17" x2="8" y2="17"/>
+                        </svg>
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[9px] font-black uppercase tracking-[0.14em] text-[#999]">
+                          {contract?.title || "Contract"}
+                        </p>
+                        {job.milestoneIndex && (
+                          <p className="text-[11px] font-black text-[#1a1a1a] leading-tight mt-0.5">
+                            Milestone {job.milestoneIndex}{job.milestoneTitle ? `: ${job.milestoneTitle}` : ""}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Status badge */}
+                      <span className={`flex-shrink-0 rounded-full px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.08em] ${statusColor}`}>
+                        {statusLabel}
+                      </span>
+                    </div>
+
+                    {/* Description */}
+                    <div className="mt-4 rounded-[10px] bg-[#F5F3EF] px-3 py-2.5">
+                      <p className="text-[12px] text-[#555] leading-snug line-clamp-2">{job.description || "Work submitted for review."}</p>
+                    </div>
+
+                    {/* Date */}
+                    <div className="mt-3 flex items-center gap-1.5 text-[11px] text-[#999]">
+                      <Calendar size={11} />
+                      <span>Submitted {job.submittedAt.toLocaleDateString()}</span>
+                    </div>
+
+                    {/* View Details button */}
+                    <button
+                      type="button"
+                      onClick={() => setSelectedSubmissionId(job.id)}
+                      className="mt-4 w-full rounded-[10px] bg-gradient-to-r from-orange-600 to-orange-400 py-3 text-[12px] font-black uppercase tracking-[0.1em] text-white transition "
+                    >
+                      View Details
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex min-h-[200px] flex-col items-center justify-center rounded-[14px] border border-dashed border-[#EAE7E2] bg-white px-5 py-10 text-center">
+              <ClipboardCheck className="h-10 w-10 text-[#F7931A]" />
+              <p className="mt-3 text-[14px] font-semibold text-[#1a1a1a]">No submitted jobs yet</p>
+              <p className="mt-1 text-[12px] text-[#999]">Submitted work will appear here once you submit a milestone.</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {selectedSubmission && (
         <div className="fixed inset-0 z-[75] flex items-end justify-center px-2 py-2 sm:items-center sm:px-4 sm:py-4">
-          <div
-            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-            onClick={() => setSelectedSubmissionId(null)}
-          />
-          <div className="relative z-[76] max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-[14px] border border-[#EAE7E2] bg-white p-4 shadow-[0_20px_50px_rgba(0,0,0,0.2)] sm:rounded-[16px] sm:p-5">
-            <button
-              type="button"
-              onClick={() => setSelectedSubmissionId(null)}
-              aria-label="Close"
-              className="absolute right-4 top-4 rounded-full border border-[#EAE7E2] bg-white p-2 text-[#6b6762] hover:bg-[#F7F4F0]"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setSelectedSubmissionId(null)} />
+          <div className="relative z-[76] max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-[20px] bg-white shadow-[0_20px_60px_rgba(0,0,0,0.25)]">
 
-            <div className="pr-10">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#8C4F00]">
-                Submitted Work
-              </div>
-              <div className="mt-2 break-words text-[16px] font-semibold leading-6 text-[#1a1a1a] [overflow-wrap:anywhere] sm:text-[18px]">
-                {selectedSubmissionContract?.title || "Contract submission"}
-              </div>
-              <div className="mt-1 text-[12px] capitalize text-[#6b6762]">
-                Status: {selectedSubmission.status === "rejected" ? "Changes requested" : selectedSubmission.status}
-              </div>
-            </div>
+            {/* Header */}
+            <div className="px-5 pt-5 pb-4 border-b border-[#F0EDE8]">
+              <button type="button" onClick={() => setSelectedSubmissionId(null)} aria-label="Close" className="absolute right-4 top-4 text-[#999] hover:text-[#1a1a1a] transition-colors text-[18px] font-light">✕</button>
 
-            <div className="mt-5 rounded-[12px] border border-[#EFECE7] bg-[#FAF8F5] p-4">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#9e9690]">
-                Your Submission
+              {/* Status + label */}
+              <div className="flex items-center gap-2 mb-2">
+                <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-[0.08em] ${
+                  selectedSubmission.status === "approved" ? "bg-[#E6F4EA] text-[#2E7D32]" :
+                  selectedSubmission.status === "rejected" ? "bg-[#FFF5F5] text-[#B91C1C]" :
+                  "bg-[#FFF4E6] text-[#8C4F00]"
+                }`}>
+                  {selectedSubmission.status === "approved" ? "Approved" : selectedSubmission.status === "rejected" ? "Changes Requested" : "Pending Review"}
+                </span>
+                <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#999]">SUBMITTED WORK</span>
               </div>
-              <p className="mt-2 text-[13px] leading-6 text-[#1a1a1a]">
-                {selectedSubmission.description || "Work submitted for review."}
-              </p>
-              {selectedSubmission.link ? (
-                <p className="mt-3 break-all text-[12px] leading-5 text-[#6b6762] [overflow-wrap:anywhere]">
-                  Link: <a href={selectedSubmission.link} target="_blank" rel="noreferrer" className="text-[#8C4F00] underline">{selectedSubmission.link}</a>
-                </p>
-              ) : null}
-              {selectedSubmission.attachment ? (
-                <p className="mt-2 break-all text-[12px] leading-5 text-[#6b6762] [overflow-wrap:anywhere]">
-                  Attachment: <a href={selectedSubmission.attachment.url} target="_blank" rel="noreferrer" className="text-[#8C4F00] underline">{selectedSubmission.attachment.name}</a>
-                </p>
-              ) : null}
-            </div>
 
-            {selectedSubmission.status === "rejected" ? (
-              <div className="mt-4 rounded-[12px] border border-[#F8D7DA] bg-[#FFF5F5] p-4">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#B42318]">
-                  Client Requested Adjustments
+              {/* Contract title */}
+              <h2 className="text-[20px] font-black text-[#1a1a1a] leading-tight">
+                {selectedSubmissionContract?.title || "Contract Submission"}
+              </h2>
+
+              {/* Milestone */}
+              {selectedSubmission.milestoneIndex && (
+                <div className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-[#FFF4E6] border border-[#F7931A30] px-2.5 py-0.5">
+                  <span className="text-[10px] font-bold text-[#8C4F00]">
+                    Milestone {selectedSubmission.milestoneIndex}{selectedSubmission.milestoneTitle ? `: ${selectedSubmission.milestoneTitle}` : ""}
+                  </span>
                 </div>
-                <p className="mt-2 text-[13px] leading-6 text-[#7F1D1D]">
-                  {selectedSubmission.revisionMessage || selectedSubmissionContract?.revisionMessage || "The client requested updates before approval."}
-                </p>
-              </div>
-            ) : null}
+              )}
 
-            <div className="mt-5 grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:justify-end">
-              {selectedSubmission.status !== "approved" ? (
+              {/* Date */}
+              <p className="mt-1.5 text-[11px] text-[#999]">Submitted {selectedSubmission.submittedAt.toLocaleDateString()}</p>
+            </div>
+
+            {/* Submission content */}
+            <div className="px-5 py-4 border-b border-[#F0EDE8]">
+              <div className="rounded-[12px] bg-[#F5F3EF] px-4 py-3">
+                <p className="text-[9px] font-black uppercase tracking-[0.12em] text-[#999] mb-2">Your Submission</p>
+                <p className="text-[13px] text-[#1a1a1a] leading-[1.6]">{selectedSubmission.description || "Work submitted for review."}</p>
+                {selectedSubmission.link && (
+                  <p className="mt-2 text-[12px] text-[#6b6762] break-all [overflow-wrap:anywhere]">
+                    <span className="font-semibold text-[#999]">Link: </span>
+                    <a href={selectedSubmission.link} target="_blank" rel="noreferrer" className="text-[#8C4F00] underline">{selectedSubmission.link}</a>
+                  </p>
+                )}
+                {selectedSubmission.attachment && (
+                  <p className="mt-2 text-[12px] text-[#6b6762] break-all [overflow-wrap:anywhere]">
+                    <span className="font-semibold text-[#999]">Attachment: </span>
+                    <a href={selectedSubmission.attachment.url} target="_blank" rel="noreferrer" className="text-[#8C4F00] underline">{selectedSubmission.attachment.name}</a>
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Client note if rejected */}
+            {selectedSubmission.status === "rejected" && (
+              <div className="px-5 py-4 border-b border-[#F0EDE8]">
+                <div className="rounded-[12px] border border-[#FCA5A5] bg-[#FFF5F5] px-4 py-3">
+                  <p className="text-[9px] font-black uppercase tracking-[0.12em] text-[#B91C1C] mb-2">Client Requested Adjustments</p>
+                  <p className="text-[13px] text-[#7F1D1D] leading-[1.6]">
+                    {selectedSubmission.revisionMessage || selectedSubmissionContract?.revisionMessage || "The client requested updates before approval."}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Footer actions */}
+            <div className="px-5 pb-5 pt-4 flex items-center gap-3">
+              {selectedSubmission.status !== "approved" && (
                 <Button
                   size="sm"
-                  className="w-full rounded-full sm:w-auto"
-                  onClick={() => {
-                    openEditSubmission(selectedSubmission);
-                    setSelectedSubmissionId(null);
-                  }}
+                  className="flex-1 rounded-[10px] bg-[#8C4F00] hover:bg-[#6B3A00] text-white font-black py-3"
+                  onClick={() => { openEditSubmission(selectedSubmission); setSelectedSubmissionId(null); }}
                 >
-                  {selectedSubmission.status === "rejected" ? "Adjust And Resubmit" : "Edit Submission"}
+                  {selectedSubmission.status === "rejected" ? "Adjust & Resubmit" : "Edit Submission"}
                 </Button>
-              ) : null}
-              {selectedSubmissionContract ? (
+              )}
+              {selectedSubmissionContract && (
                 <Button
                   size="sm"
                   variant="outline"
-                  className="w-full rounded-full sm:w-auto"
-                  onClick={() => {
-                    setSelectedId(selectedSubmissionContract.id);
-                    setActiveTab("contracts");
-                    setIsModalOpen(true);
-                    setSelectedSubmissionId(null);
-                  }}
+                  className="flex-1 rounded-[10px] bg-[#1a2332] text-white border-[#1a2332] hover:bg-[#0f1a26] font-black py-3"
+                  onClick={() => { setSelectedId(selectedSubmissionContract.id); setActiveTab("contracts"); setIsModalOpen(true); setSelectedSubmissionId(null); }}
                 >
                   View Contract
                 </Button>
-              ) : null}
+              )}
             </div>
+
           </div>
         </div>
       )}
@@ -1093,371 +1101,276 @@ export default function FreelancerContractsContent() {
 
       {isModalOpen && selectedContract ? (
         <div className="fixed inset-0 z-[80] flex items-end justify-center px-2 py-2 sm:items-center sm:px-4 sm:py-4">
-          <div
-            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-            onClick={() => setIsModalOpen(false)}
-          />
-          <div className="relative z-[81] max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-[14px] border border-[#EAE7E2] bg-[#FCF9F7] p-4 shadow-[0_20px_50px_rgba(0,0,0,0.2)] sm:rounded-[16px] sm:p-5">
-            <button
-              type="button"
-              onClick={() => setIsModalOpen(false)}
-              aria-label="Close"
-              className="absolute right-4 top-4 rounded-full border border-[#EAE7E2] bg-white p-2 text-[#6b6762] hover:bg-[#F7F4F0]"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-            <div className="rounded-[14px] border border-[#EAE7E2] bg-white p-5">
-            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-              <div>
-                <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#8C4F00]">
-                  Contract Details
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
+          <div className="relative z-[81] max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-[20px] bg-white shadow-[0_20px_60px_rgba(0,0,0,0.25)]">
+
+            {/* ── Modal Header ── */}
+            <div className="px-5 pt-5 pb-4 border-b border-[#F0EDE8]">
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                aria-label="Close"
+                className="absolute right-4 top-4 text-[#999] hover:text-[#1a1a1a] transition-colors text-[18px] font-light"
+              >
+                ✕
+              </button>
+
+              {/* Status + contract ID */}
+              <div className="flex items-center gap-2 mb-2">
+                {(() => {
+                  const statusLabel = isFinishedContract(selectedContract) ? "Finished" : isEscrowContract(selectedContract) ? "Ongoing" : "Active";
+                  const statusColor = statusLabel === "Finished" ? "bg-[#E6F4EA] text-[#2E7D32]" : statusLabel === "Ongoing" ? "bg-[#EFF6FF] text-[#1D4ED8]" : "bg-[#FFF4E6] text-[#8C4F00]";
+                  return <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-[0.08em] ${statusColor}`}>{statusLabel}</span>;
+                })()}
+                <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#999]">
+                  CONTRACT #{selectedContract.id.slice(-6).toUpperCase()}
+                </span>
+              </div>
+
+              {/* Title */}
+              <h2 className="text-[22px] font-black text-[#1a1a1a] leading-tight">{selectedContract.title}</h2>
+
+              {/* Client */}
+              <div className="flex items-center gap-2 mt-1.5">
+                <div className="h-6 w-6 rounded-full bg-[#1a2332] flex items-center justify-center overflow-hidden flex-shrink-0">
+                  {(selectedContract as any).clientAvatarUrl ? (
+                    <img src={(selectedContract as any).clientAvatarUrl} alt={selectedContract.clientName} className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="text-[8px] font-black text-white">
+                      {(selectedContract.clientName ?? "C").split(" ").map((p: string) => p[0]).join("").slice(0, 2).toUpperCase()}
+                    </span>
+                  )}
                 </div>
-                <div className="mt-2 break-words text-[16px] font-semibold leading-6 text-[#1a1a1a] [overflow-wrap:anywhere] sm:text-[18px]">
-                  {selectedContract.title}
-                </div>
-                <div className="text-[12px] text-[#9e9690]">
-                  Client: {selectedContract.clientName} • {selectedContract.status}
-                </div>
+                <span className="text-[13px] text-[#555]">Client: <strong>{selectedContract.clientName}</strong></span>
               </div>
             </div>
 
-            <div className="mt-4 text-[12px] leading-[1.7] text-[#6b6762]">
-              {selectedContract.description}
-            </div>
-            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <div className="min-w-0 rounded-[12px] border border-[#EFECE7] bg-[#FAF8F5] px-3 py-3 sm:px-4">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#9e9690]">Budget</div>
-                <div className="mt-1 text-[14px] font-semibold text-[#1a1a1a]">{selectedContract.budget}</div>
-              </div>
-              <div className="min-w-0 rounded-[12px] border border-[#EFECE7] bg-[#FAF8F5] px-3 py-3 sm:px-4">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#9e9690]">Work Status</div>
-                <div className="mt-1 text-[14px] font-semibold capitalize text-[#1a1a1a]">
-                  {selectedContract.workStatus?.replace(/_/g, " ") ?? "Not started"}
-                </div>
-              </div>
-              <div className="min-w-0 rounded-[12px] border border-[#EFECE7] bg-[#FAF8F5] px-3 py-3 sm:px-4">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#9e9690]">Next</div>
-                <div className="mt-1 truncate text-[14px] font-semibold text-[#1a1a1a]">{selectedContract.nextMilestone}</div>
-              </div>
-            </div>
-            </div>
-
-            <div className="mt-5 rounded-[12px] border border-[#EAE7E2] bg-[#FAF8F5] p-4">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8C4F00]">
-                Contract Overview
-              </div>
-              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 text-[11px] text-[#6b6762]">
-                <div className="rounded-[10px] border border-[#EFECE7] bg-white px-3 py-2">
-                  <div className="uppercase tracking-[0.12em] text-[#9e9690]">Project</div>
-                  <div className="mt-1 font-semibold text-[#1a1a1a]">{selectedContract.title}</div>
-                </div>
-                <div className="rounded-[10px] border border-[#EFECE7] bg-white px-3 py-2">
-                  <div className="uppercase tracking-[0.12em] text-[#9e9690]">Client</div>
-                  <div className="mt-1 font-semibold text-[#1a1a1a]">{selectedContract.clientName}</div>
-                </div>
-                <div className="rounded-[10px] border border-[#EFECE7] bg-white px-3 py-2">
-                  <div className="uppercase tracking-[0.12em] text-[#9e9690]">Contract Type</div>
-                  <div className="mt-1 font-semibold text-[#1a1a1a]">
-                    {selectedContract.contractType ?? "Fixed Price"}
-                  </div>
-                </div>
-                <div className="rounded-[10px] border border-[#EFECE7] bg-white px-3 py-2">
-                  <div className="uppercase tracking-[0.12em] text-[#9e9690]">Status</div>
-                  <div className="mt-1 font-semibold text-[#1a1a1a]">{selectedContract.status}</div>
-                </div>
-                <div className="rounded-[10px] border border-[#EFECE7] bg-white px-3 py-2">
-                  <div className="uppercase tracking-[0.12em] text-[#9e9690]">Start Date</div>
-                  <div className="mt-1 font-semibold text-[#1a1a1a]">{selectedContract.startDate}</div>
-                </div>
-                <div className="rounded-[10px] border border-[#EFECE7] bg-white px-3 py-2">
-                  <div className="uppercase tracking-[0.12em] text-[#9e9690]">Budget</div>
-                  <div className="mt-1 font-semibold text-[#1a1a1a]">{selectedContract.budget}</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-5 rounded-[12px] border border-[#EAE7E2] bg-white p-4">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8C4F00]">
-                Scope Of Work
-              </div>
-              {selectedContract.scopeItems?.length ? (
-                <ul className="mt-3 grid grid-cols-1 gap-2 text-[12px] text-[#6b6762]">
-                  {selectedContract.scopeItems.map((item) => (
-                    <li key={item} className="flex items-start gap-2">
-                      <span className="mt-1 h-1.5 w-1.5 rounded-full bg-[#F7931A]" />
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="mt-3 text-[12px] text-[#6b6762]">
-                  Define the deliverables and features for this contract.
+            {/* ── Value + Escrow Status ── */}
+            <div className="px-5 py-4 grid grid-cols-2 gap-3 border-b border-[#F0EDE8]">
+              <div className="rounded-[12px] bg-[#F5F3EF] px-4 py-3">
+                <p className="text-[9px] font-black uppercase tracking-[0.12em] text-[#999] mb-1">Total Contract Value</p>
+                <p className="text-[16px] font-black text-[#F7931A]">
+                  {(() => {
+                    const sats = selectedContract.paymentTotalAmountSats || parseSats(selectedContract.budget) || 0;
+                    return sats > 0 ? `${sats.toLocaleString()} sats` : selectedContract.budget;
+                  })()}
                 </p>
-              )}
+              </div>
+              <div className="rounded-[12px] bg-[#F5F3EF] px-4 py-3">
+                <p className="text-[9px] font-black uppercase tracking-[0.12em] text-[#999] mb-1">Escrow Status</p>
+                <div className="flex items-center gap-1.5">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={selectedContract.paymentStatus === "funded" || selectedContract.paymentStatus === "released" ? "#1D4ED8" : "#999"} strokeWidth="2">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                  </svg>
+                  <span className="text-[13px] font-bold text-[#1a1a1a]">
+                    {selectedContract.paymentStatus === "funded" ? "Funds Secured" :
+                     selectedContract.paymentStatus === "released" ? "Released" :
+                     selectedContract.paymentStatus === "invoice_created" ? "Invoice Sent" :
+                     "Not Funded"}
+                  </span>
+                </div>
+              </div>
             </div>
 
-            {selectedContract.contractType === "Fixed Price" ? (
-              <div className="mt-5 rounded-[12px] border border-[#EAE7E2] bg-[#FAF8F5] p-4">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8C4F00]">
-                  Milestones
-                </div>
-                {selectedContract.milestones?.length ? (
-                  <div className="mt-3 space-y-3">
-                    {selectedContract.milestones.map((milestone) => (
-                      <div
-                        key={milestone.name}
-                        className="flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-[#EFECE7] bg-white px-3 py-2 text-[11px]"
-                      >
-                        <div>
-                          <div className="font-semibold text-[#1a1a1a]">{milestone.title || milestone.name}</div>
-                          <div className="text-[#9e9690]">{milestone.deadline}</div>
-                        </div>
-                        <div className="text-right">
-                          <div className="font-semibold text-[#8C4F00]">
-                            {milestone.freelancerAmountSats ? `${milestone.freelancerAmountSats.toLocaleString()} sats` : milestone.amount}
+            {/* ── Milestones ── */}
+            {selectedContract.milestones && selectedContract.milestones.length > 0 && (
+              <div className="px-5 py-4 border-b border-[#F0EDE8]">
+                <h3 className="text-[14px] font-black text-[#1a1a1a] mb-3">Milestones</h3>
+                <div className="relative">
+                  {/* Vertical line */}
+                  <div className="absolute left-[7px] top-2 bottom-2 w-[2px] bg-[#EAE7E2]" />
+                  <div className="space-y-4">
+                    {selectedContract.milestones.map((ms: any, i: number) => {
+                      const isReleased = ms.status === "released";
+                      const isCurrent = !isReleased && ms.status !== "pending" || (i === (selectedContract.paymentReleasedInstallments ?? 0));
+                      const msAmount = ms.freelancerAmountSats ? `${ms.freelancerAmountSats.toLocaleString()} sats` : ms.amount ?? "—";
+                      const msStatusLabel = isReleased ? "Paid" : ms.status === "funded" || ms.status === "submitted" ? "Pending" : "Scheduled";
+                      const msStatusColor = isReleased ? "bg-[#EFF6FF] text-[#1D4ED8]" : ms.status === "funded" || ms.status === "submitted" ? "bg-[#FFF4E6] text-[#F7931A]" : "bg-[#F5F3EF] text-[#999]";
+                      return (
+                        <div key={i} className="flex items-start gap-4 pl-6 relative">
+                          {/* Dot */}
+                          <div className={`absolute left-0 top-1 h-4 w-4 rounded-full border-2 flex items-center justify-center ${isReleased ? "border-[#1D4ED8] bg-[#1D4ED8]" : isCurrent ? "border-[#F7931A] bg-[#F7931A]" : "border-[#DDD8D0] bg-white"}`}>
+                            {isReleased && <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>}
                           </div>
-                          <div className="text-[10px] uppercase tracking-[0.12em] text-[#6b6762]">
-                            {milestone.status}
+                          <div className="flex-1 flex items-start justify-between gap-2">
+                            <div>
+                              <p className={`text-[13px] font-bold ${isReleased ? "text-[#555]" : "text-[#1a1a1a]"}`}>{ms.title || ms.name || `Milestone ${i + 1}`}</p>
+                              {ms.deadline && <p className="text-[11px] text-[#999] mt-0.5">{isReleased ? "Completed on" : "Due"} {ms.deadline}</p>}
+                            </div>
+                            <span className={`flex-shrink-0 rounded-full px-2.5 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] ${msStatusColor}`}>
+                              {msAmount} {msStatusLabel}
+                            </span>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
-                ) : (
-                  <p className="mt-3 text-[12px] text-[#6b6762]">
-                    Milestones will appear here once defined.
-                  </p>
-                )}
+                </div>
               </div>
-            ) : null}
+            )}
 
-            <div className="mt-5 rounded-[12px] border border-[#EAE7E2] bg-white p-4">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8C4F00]">
-                Payment Details
+            {/* ── Contract Terms ── */}
+            <div className="px-5 py-4 border-b border-[#F0EDE8]">
+              <div className="rounded-[12px] border border-[#EAE7E2] bg-[#F5F3EF] px-4 py-3">
+                <h3 className="text-[13px] font-black text-[#1a1a1a] mb-3">Contract Terms</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex items-start gap-2">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="1.5" className="mt-0.5 flex-shrink-0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    <div>
+                      <p className="text-[9px] font-black uppercase tracking-[0.1em] text-[#999]">Deliverable Type</p>
+                      <p className="text-[12px] font-semibold text-[#1a1a1a]">{selectedContract.contractType ?? "Fixed Price"}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="1.5" className="mt-0.5 flex-shrink-0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    <div>
+                      <p className="text-[9px] font-black uppercase tracking-[0.1em] text-[#999]">Work Status</p>
+                      <p className="text-[12px] font-semibold text-[#1a1a1a] capitalize">{selectedContract.workStatus?.replace(/_/g, " ") ?? "Not started"}</p>
+                    </div>
+                  </div>
+                </div>
               </div>
+            </div>
+
+            {/* ── Submit Work Section (all existing logic preserved) ── */}
+            <div className="px-5 py-4">
               {(() => {
-                const jobAmount = selectedContract.paymentTotalAmountSats || parseSats(selectedContract.budget) || 0;
-                const platformFee = selectedContract.platformFeeSats || Math.ceil(jobAmount * ((selectedContract.platformFeePercent ?? 5) / 100));
-                const clientTotal = selectedContract.paymentTotalChargedSats || jobAmount + platformFee;
-                const released = selectedContract.escrowReleasedSats ?? 0;
-                const funded = selectedContract.escrowFundedTotalSats ?? 0;
-                const remainingFunded = Math.max(0, funded - platformFee - released);
+                const isFinished =
+                  selectedContract.workStatus === "approved" ||
+                  selectedContract.workStatus === "completed" ||
+                  selectedContract.paymentStatus === "released" ||
+                  selectedContract.status === "Completed";
+                const isSubmitted = selectedContract.workStatus === "submitted";
+                const isChangesRequested = selectedContract.workStatus === "changes_requested";
+                const releasedCount = selectedContract.paymentReleasedInstallments ?? 0;
+                const totalMilestones = selectedContract.paymentInstallments ?? 1;
+                const nextIdx = releasedCount + 1;
+                const milestones = selectedContract.milestones ?? [];
+                const currentMs = milestones.find((m: any, i: number) => Number(m.index ?? i + 1) === nextIdx);
+                const currentMsTitle = (currentMs as any)?.title || (currentMs as any)?.name || `Milestone ${nextIdx}`;
+
+                if (isFinished) {
+                  return (
+                    <div className="rounded-[12px] border border-[#D1FAE5] bg-[#F0FDF4] p-4">
+                      <div className="flex items-center gap-2">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                        <span className="text-[12px] font-bold text-[#065F46] uppercase tracking-[0.1em]">Contract Completed</span>
+                      </div>
+                      <p className="mt-2 text-[12px] text-[#065F46]">All milestones approved and payment released. No further submissions needed.</p>
+                    </div>
+                  );
+                }
+                if (isSubmitted) {
+                  return (
+                    <div className="rounded-[12px] border border-[#DBEAFE] bg-[#EFF6FF] p-4">
+                      <div className="flex items-center gap-2">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1D4ED8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                        <span className="text-[12px] font-bold text-[#1E40AF] uppercase tracking-[0.1em]">Awaiting Client Review</span>
+                      </div>
+                      <p className="mt-2 text-[12px] text-[#1E40AF]">Your work for <strong>Milestone {nextIdx}: {currentMsTitle}</strong> has been submitted. You'll be notified once the client reviews it.</p>
+                    </div>
+                  );
+                }
+                if (isChangesRequested) {
+                  return (
+                    <div className="space-y-3">
+                      <div className="rounded-[12px] border border-[#FCA5A5] bg-[#FFF5F5] p-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#B91C1C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                          <span className="text-[11px] font-black text-[#B91C1C] uppercase tracking-[0.12em]">Adjustment Requested — Milestone {nextIdx}: {currentMsTitle}</span>
+                        </div>
+                        <p className="text-[12px] text-[#7F1D1D] leading-[1.6]"><strong>The client asked for changes.</strong> Review their note, make adjustments, and resubmit for <strong>{currentMsTitle}</strong>.</p>
+                        {selectedContract.revisionMessage ? (
+                          <div className="mt-3 rounded-[8px] border border-[#FCA5A5] bg-white px-3 py-2">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-[#B91C1C] mb-1">Client's note:</p>
+                            <p className="text-[12px] text-[#7F1D1D] leading-[1.6] italic">"{selectedContract.revisionMessage}"</p>
+                          </div>
+                        ) : null}
+                      </div>
+                      <div className="space-y-2">
+                        <textarea value={workMessage} onChange={(e) => setWorkMessage(e.target.value)} placeholder={`Describe what you adjusted for "${currentMsTitle}"`} rows={3} className="w-full rounded-[10px] border border-[#EAE7E7] bg-[#FAF8F5] px-3 py-2 text-[12px] text-[#1a1a1a] outline-none focus:ring-2 focus:ring-orange-400/20" />
+                        <input value={workLink} onChange={(e) => setWorkLink(e.target.value)} placeholder="Paste a link to the updated deliverable" className="w-full rounded-[10px] border border-[#EAE7E7] bg-[#FAF8F5] px-3 py-2 text-[12px] text-[#1a1a1a] outline-none focus:ring-2 focus:ring-orange-400/20" />
+                        <input ref={fileInputRef} type="file" className="hidden" onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)} />
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button size="sm" variant="outline" className="rounded-full" onClick={() => fileInputRef.current?.click()}>{selectedFile ? selectedFile.name : "Attach File"}</Button>
+                          {selectedFile ? <button type="button" onClick={() => { setSelectedFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }} className="text-[11px] font-semibold text-[#6b6762]">Remove</button> : null}
+                          <Button size="sm" className="rounded-full" onClick={() => void handleSubmitWork()} disabled={isSubmitting}>{isSubmitting ? "Submitting..." : "Resubmit Adjusted Work"}</Button>
+                        </div>
+                        {submissionSuccess ? <p className="text-[12px] text-[#2F855A]">{submissionSuccess}</p> : null}
+                        {submissionError ? <p className="text-[12px] text-[#C53030]">{submissionError}</p> : null}
+                      </div>
+                    </div>
+                  );
+                }
                 return (
-              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 text-[11px] text-[#6b6762]">
-                <div className="rounded-[10px] border border-[#EFECE7] bg-[#FAF8F5] px-3 py-2">
-                  <div className="uppercase tracking-[0.12em] text-[#9e9690]">Total Value</div>
-                  <div className="mt-1 font-semibold text-[#1a1a1a]">{jobAmount.toLocaleString()} sats</div>
-                </div>
-                <div className="rounded-[10px] border border-[#EFECE7] bg-[#FAF8F5] px-3 py-2">
-                  <div className="uppercase tracking-[0.12em] text-[#9e9690]">Client Paid With Fee</div>
-                  <div className="mt-1 font-semibold text-[#1a1a1a]">{clientTotal.toLocaleString()} sats</div>
-                </div>
-                <div className="rounded-[10px] border border-[#EFECE7] bg-[#FAF8F5] px-3 py-2">
-                  <div className="uppercase tracking-[0.12em] text-[#9e9690]">Funded Escrow</div>
-                  <div className="mt-1 font-semibold text-[#1a1a1a]">{funded.toLocaleString()} sats</div>
-                </div>
-                <div className="rounded-[10px] border border-[#EFECE7] bg-[#FAF8F5] px-3 py-2">
-                  <div className="uppercase tracking-[0.12em] text-[#9e9690]">Available To Release</div>
-                  <div className="mt-1 font-semibold text-[#1a1a1a]">{remainingFunded.toLocaleString()} sats</div>
-                </div>
-                <div className="rounded-[10px] border border-[#EFECE7] bg-[#FAF8F5] px-3 py-2">
-                  <div className="uppercase tracking-[0.12em] text-[#9e9690]">Platform Fee</div>
-                  <div className="mt-1 font-semibold text-[#1a1a1a]">{platformFee.toLocaleString()} sats</div>
-                </div>
-                <div className="rounded-[10px] border border-[#EFECE7] bg-[#FAF8F5] px-3 py-2">
-                  <div className="uppercase tracking-[0.12em] text-[#9e9690]">Released</div>
-                  <div className="mt-1 font-semibold text-[#1a1a1a]">{released.toLocaleString()} sats</div>
-                </div>
-              </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-[10px] font-black uppercase tracking-[0.14em] text-[#8C4F00]">Submit Work</span>
+                      <div className="inline-flex items-center rounded-full bg-[#FFF4E6] border border-[#F7931A40] px-2.5 py-0.5">
+                        <span className="text-[9px] font-bold text-[#8C4F00]">Milestone {nextIdx} of {totalMilestones}: {currentMsTitle}</span>
+                      </div>
+                    </div>
+                    <textarea value={workMessage} onChange={(e) => setWorkMessage(e.target.value)} placeholder={`Describe what you completed for "${currentMsTitle}"`} rows={3} className="w-full rounded-[10px] border border-[#EAE7E7] bg-[#FAF8F5] px-3 py-2 text-[12px] text-[#1a1a1a] outline-none focus:ring-2 focus:ring-orange-400/20" />
+                    <input value={workLink} onChange={(e) => setWorkLink(e.target.value)} placeholder="Paste a link to deliverable, preview, or repository" className="w-full rounded-[10px] border border-[#EAE7E7] bg-[#FAF8F5] px-3 py-2 text-[12px] text-[#1a1a1a] outline-none focus:ring-2 focus:ring-orange-400/20" />
+                    <input ref={fileInputRef} type="file" className="hidden" onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)} />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button size="sm" variant="outline" className="rounded-full" onClick={() => fileInputRef.current?.click()}>{selectedFile ? selectedFile.name : "Attach File"}</Button>
+                      {selectedFile ? <button type="button" onClick={() => { setSelectedFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }} className="text-[11px] font-semibold text-[#6b6762]">Remove</button> : null}
+                      <Button size="sm" className="rounded-full" onClick={() => void handleSubmitWork()} disabled={isSubmitting}>{isSubmitting ? "Submitting..." : "Submit Work"}</Button>
+                    </div>
+                    {submissionSuccess ? <p className="text-[12px] text-[#2F855A]">{submissionSuccess}</p> : null}
+                    {submissionError ? <p className="text-[12px] text-[#C53030]">{submissionError}</p> : null}
+                  </div>
                 );
               })()}
-              <p className="mt-3 text-[11px] text-[#9e9690]">
-                Freelancer payouts are released only after the client approves each funded milestone.
-              </p>
             </div>
 
-            <div className="mt-5 grid grid-cols-1 gap-3 text-[11px] text-[#6b6762] sm:grid-cols-2">
-              <div className="rounded-[10px] border border-[#EFECE7] bg-[#FAF8F5] px-3 py-2">
-                <div className="uppercase tracking-[0.12em] text-[#9e9690]">Budget</div>
-                <div className="mt-1 font-semibold text-[#1a1a1a]">{selectedContract.budget}</div>
-              </div>
-              <div className="rounded-[10px] border border-[#EFECE7] bg-[#FAF8F5] px-3 py-2">
-                <div className="uppercase tracking-[0.12em] text-[#9e9690]">Progress</div>
-                <div className="mt-1 font-semibold text-[#1a1a1a]">{selectedContract.progress}%</div>
-              </div>
-              <div className="rounded-[10px] border border-[#EFECE7] bg-[#FAF8F5] px-3 py-2">
-                <div className="uppercase tracking-[0.12em] text-[#9e9690]">Start</div>
-                <div className="mt-1 font-semibold text-[#1a1a1a]">{selectedContract.startDate}</div>
-              </div>
-              <div className="rounded-[10px] border border-[#EFECE7] bg-[#FAF8F5] px-3 py-2">
-                <div className="uppercase tracking-[0.12em] text-[#9e9690]">Due</div>
-                <div className="mt-1 font-semibold text-[#1a1a1a]">{selectedContract.dueDate}</div>
-              </div>
-            </div>
-
-            <div className="mt-4 rounded-[10px] border border-[#EFECE7] bg-[#FAF8F5] px-4 py-3">
-              <div className="text-[10px] uppercase tracking-[0.12em] text-[#9e9690]">
-                Next Milestone
-              </div>
-              <div className="mt-2 text-[12px] font-semibold text-[#1a1a1a]">
-                {selectedContract.nextMilestone}
-              </div>
-            </div>
-
-            {selectedContract.workStatus === "changes_requested" || selectedContract.revisionMessage ? (
-              <div className="mt-5 rounded-[12px] border border-[#F8D7DA] bg-[#FFF5F5] p-4">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B42318]">
-                  Client Requested Adjustments
-                </div>
-                <p className="mt-2 text-[12px] leading-6 text-[#7F1D1D]">
-                  {selectedContract.revisionMessage || "The client requested changes before approval. Update the work and submit it again."}
-                </p>
-              </div>
-            ) : null}
-
-            <div className="mt-5 rounded-[12px] border border-[#EAE7E2] bg-[#FAF8F5] p-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8C4F00]">
-                    Submit work
-                  </div>
-                  <p className="mt-2 text-[12px] text-[#6b6762]">
-                    Use the contract page to upload your deliverable and share a link for client review.
-                  </p>
-                </div>
-              </div>
-             
-              <div className="mt-4 space-y-3">
-                <textarea
-                  value={workMessage}
-                  onChange={(e) => setWorkMessage(e.target.value)}
-                  placeholder="Describe the completed work"
-                  rows={3}
-                  className="w-full rounded-[10px] border border-[#EAE7E7] bg-white px-3 py-2 text-[12px] text-[#1a1a1a] outline-none focus:ring-2 focus:ring-orange-400/20"
-                />
-                <input
-                  value={workLink}
-                  onChange={(e) => setWorkLink(e.target.value)}
-                  placeholder="Paste a link to deliverable, preview, or repository"
-                  className="w-full rounded-[10px] border border-[#EAE7E7] bg-white px-3 py-2 text-[12px] text-[#1a1a1a] outline-none focus:ring-2 focus:ring-orange-400/20"
-                />
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  className="hidden"
-                  onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
-                />
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="rounded-full"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    {selectedFile ? selectedFile.name : "Attach File"}
-                  </Button>
-                  {selectedFile ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedFile(null);
-                        if (fileInputRef.current) fileInputRef.current.value = "";
-                      }}
-                      className="text-[11px] font-semibold text-[#6b6762]"
-                    >
-                      Remove
-                    </button>
-                  ) : null}
-                  <Button
-                    size="sm"
-                    className="rounded-full"
-                    onClick={() => void handleSubmitWork()}
-                    disabled={isSubmitting}
-                  >
-                    {isSubmitting ? "Submitting..." : "Submit Work"}
-                  </Button>
-                </div>
-                {submissionSuccess ? (
-                  <p className="text-[12px] text-[#2F855A]">{submissionSuccess}</p>
-                ) : null}
-                {submissionError ? (
-                  <p className="text-[12px] text-[#C53030]">{submissionError}</p>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="mt-5 flex flex-wrap gap-2">
+            {/* ── Footer Actions ── */}
+            <div className="px-5 pb-5 pt-2 border-t border-[#F0EDE8] flex items-center gap-3">
+              {/* Submit Work / Message Client buttons */}
+              {/* <Button
+                size="sm"
+                className="flex-1 rounded-[10px] bg-[#8C4F00] hover:bg-[#6B3A00] text-white font-black py-3"
+                onClick={() => {
+                  const el = document.querySelector('[placeholder*="Describe what you"]') as HTMLTextAreaElement | null;
+                  el?.focus();
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mr-1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                Submit Work
+              </Button> */}
               <Button
                 size="sm"
                 variant="outline"
-                className="rounded-full"
+                className="flex-1 rounded-[10px] bg-[#1a2332] text-white border-[#1a2332] ] font-black py-3"
                 onClick={async () => {
                   if (!selectedContract?.jobId || !selectedContract?.freelancerId) return;
                   const clientId = selectedContract.clientId ?? "";
                   if (!clientId) return;
-                  const freelancerId =
-                    firebaseAuth.currentUser?.uid ?? selectedContract.freelancerId ?? "";
+                  const freelancerId = firebaseAuth.currentUser?.uid ?? selectedContract.freelancerId ?? "";
                   if (!freelancerId) return;
                   let freelancerName = "Freelancer";
-                  let clientName = await resolveClientName(
-                    clientId,
-                    selectedContract.clientName ?? ""
-                  );
-                  const [clientAvatarUrl, freelancerAvatarUrl] = await Promise.all([
-                    resolveClientAvatar(clientId),
-                    resolveFreelancerAvatar(freelancerId),
-                  ]);
+                  let clientName = await resolveClientName(clientId, selectedContract.clientName ?? "");
+                  const [clientAvatarUrl, freelancerAvatarUrl] = await Promise.all([resolveClientAvatar(clientId), resolveFreelancerAvatar(freelancerId)]);
                   try {
                     const allUsersSnap = await getDoc(doc(firebaseDb, "all_users", freelancerId));
-                    if (allUsersSnap.exists()) {
-                      const d = allUsersSnap.data() as any;
-                      freelancerName = d.fullName ?? d.name ?? d.email ?? "Freelancer";
-                    }
-                  } catch {
-                    freelancerName = "Freelancer";
-                  }
+                    if (allUsersSnap.exists()) { const d = allUsersSnap.data() as any; freelancerName = d.fullName ?? d.name ?? d.email ?? "Freelancer"; }
+                  } catch { freelancerName = "Freelancer"; }
                   if (!clientName) clientName = "Client";
-                  const conversationId = createConversationId(
-                    selectedContract.jobId,
-                    selectedContract.freelancerId
-                  );
-                  await setDoc(
-                    doc(firebaseDb, "conversations", conversationId),
-                    {
-                      jobId: selectedContract.jobId,
-                      jobTitle: selectedContract.title,
-                      proposalId: "",
-                      clientId,
-                      clientName,
-                      freelancerId: selectedContract.freelancerId,
-                      freelancerName,
-                      clientAvatarUrl,
-                      freelancerAvatarUrl,
-                      paymentTotalAmountSats: parseSats(selectedContract.budget),
-                      paymentStatus: "unfunded",
-                      createdBy: "system",
-                      canFreelancerMessage: true,
-                      unread: {
-                        [clientId]: 0,
-                        [selectedContract.freelancerId]: 0,
-                      },
-                      updatedAt: serverTimestamp(),
-                      createdAt: serverTimestamp(),
-                    },
-                    { merge: true }
-                  );
+                  const conversationId = createConversationId(selectedContract.jobId, selectedContract.freelancerId);
+                  await setDoc(doc(firebaseDb, "conversations", conversationId), { jobId: selectedContract.jobId, jobTitle: selectedContract.title, proposalId: "", clientId, clientName, freelancerId: selectedContract.freelancerId, freelancerName, clientAvatarUrl, freelancerAvatarUrl, paymentTotalAmountSats: parseSats(selectedContract.budget), paymentStatus: "unfunded", createdBy: "system", canFreelancerMessage: true, unread: { [clientId]: 0, [freelancerId]: 0 }, updatedAt: serverTimestamp(), createdAt: serverTimestamp() }, { merge: true });
                   router.push(`/freelancer/dashboard/messages?chat=${conversationId}`);
                 }}
               >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mr-1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                 Message Client
               </Button>
             </div>
+
           </div>
         </div>
       ) : null}
+
     </section>
   );
 }
