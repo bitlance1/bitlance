@@ -106,7 +106,7 @@ const calculateInstallmentAmount = (total: number, installments: number, install
 
 export default function FreelancerContractsContent() {
   const router = useRouter();
-  const [view, setView] = useState<"active" | "ongoing" | "finished">("active");
+  const [view, setView] = useState<"all" | "ongoing" | "finished">("all");
   const [selectedId, setSelectedId] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [contracts, setContracts] = useState<Contract[]>([]);
@@ -500,10 +500,6 @@ export default function FreelancerContractsContent() {
       contract.workStatus === "submitted" ||
       contract.workStatus === "changes_requested");
 
-  const activeContracts = useMemo(
-    () => contracts.filter((contract) => !isFinishedContract(contract) && !isEscrowContract(contract)),
-    [contracts]
-  );
   const ongoingContracts = useMemo(
     () => contracts.filter((contract) => isEscrowContract(contract)),
     [contracts]
@@ -514,7 +510,7 @@ export default function FreelancerContractsContent() {
   );
 
   const visibleContracts =
-    view === "active" ? activeContracts : view === "ongoing" ? ongoingContracts : finishedContracts;
+    view === "all" ? contracts : view === "ongoing" ? ongoingContracts : finishedContracts;
   const selectedContract =
     contracts.find((c) => c.id === selectedId) ?? visibleContracts[0];
   const selectedSubmission = selectedSubmissionId
@@ -529,11 +525,6 @@ export default function FreelancerContractsContent() {
   const editingSubmissionContract = editingSubmission
     ? contracts.find((contract) => contract.id === editingSubmission.contractId) ?? null
     : null;
-  const contractStatusFilters: Array<{ id: typeof view; label: string; count: number }> = [
-    { id: "active", label: "Active", count: activeContracts.length },
-    { id: "ongoing", label: "Ongoing", count: ongoingContracts.length },
-    { id: "finished", label: "Finished jobs", count: finishedContracts.length },
-  ];
   const needsAttentionCount = submittedJobs.filter((job) => job.status === "rejected").length;
 
   const openEditSubmission = (job: SubmittedJob) => {
@@ -640,8 +631,8 @@ export default function FreelancerContractsContent() {
       {/* ── TABS ─────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-6 border-b border-[#EAE7E2] px-1">
         {[
-          { id: "active",   label: "Active",        count: activeContracts.length },
-          { id: "ongoing",  label: "Ongoing",        count: ongoingContracts.length },
+          { id: "all",      label: "All",           count: contracts.length },
+          { id: "ongoing",  label: "Active",        count: ongoingContracts.length },
           { id: "finished", label: "Finished",       count: finishedContracts.length },
           { id: "submitted", label: "Submitted Jobs", count: submittedJobs.length, alert: needsAttentionCount > 0 },
         ].map((tab) => (
@@ -653,7 +644,7 @@ export default function FreelancerContractsContent() {
                 setActiveTab("submitted");
               } else {
                 setActiveTab("contracts");
-                setView(tab.id as "active" | "ongoing" | "finished");
+                setView(tab.id as "all" | "ongoing" | "finished");
               }
             }}
             className={`relative py-3 text-[13px] font-semibold transition whitespace-nowrap ${
@@ -822,7 +813,7 @@ export default function FreelancerContractsContent() {
             <div className="flex min-h-[200px] flex-col items-center justify-center rounded-[14px] border border-dashed border-[#EAE7E2] bg-white px-5 py-10 text-center">
               <FileText className="h-10 w-10 text-[#F7931A]" />
               <p className="mt-3 text-[14px] font-semibold text-[#1a1a1a]">
-                No {view === "finished" ? "finished jobs" : `${view} contracts`} yet
+                No {view === "all" ? "contracts" : view === "finished" ? "finished jobs" : `${view} contracts`} yet
               </p>
               <Button
                 size="sm"

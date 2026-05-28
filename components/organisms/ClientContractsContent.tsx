@@ -1633,7 +1633,7 @@ const calculateInstallmentAmount = (total: number, installments: number, install
 export default function ClientContractsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [view, setView] = useState<"active" | "ongoing" | "finished">("active");
+  const [view, setView] = useState<"all" | "ongoing" | "finished">("all");
   const [selectedId, setSelectedId] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [contracts, setContracts] = useState<Contract[]>([]);
@@ -1829,11 +1829,10 @@ export default function ClientContractsContent() {
       contract.workStatus === "submitted" ||
       contract.workStatus === "changes_requested");
 
-  const activeContracts = useMemo(() => contracts.filter((c) => !isFinishedContract(c) && !isEscrowContract(c)), [contracts]);
   const ongoingContracts = useMemo(() => contracts.filter((c) => isEscrowContract(c)), [contracts]);
   const finishedContracts = useMemo(() => contracts.filter((c) => isFinishedContract(c)), [contracts]);
 
-  const visibleContracts = view === "active" ? activeContracts : view === "ongoing" ? ongoingContracts : finishedContracts;
+  const visibleContracts = view === "all" ? contracts : view === "ongoing" ? ongoingContracts : finishedContracts;
   const selectedContract = contracts.find((c) => c.id === selectedId) ?? visibleContracts[0];
   const selectedSubmission = selectedSubmissionId ? submittedJobs.find((j) => j.id === selectedSubmissionId) ?? null : null;
   const selectedSubmissionContract = selectedSubmission ? contracts.find((c) => c.id === selectedSubmission.contractId) ?? null : null;
@@ -2041,8 +2040,8 @@ export default function ClientContractsContent() {
       {/* ── TABS ── */}
       <div className="flex items-center gap-6 border-b border-[#EAE7E2] px-1">
         {[
-          { id: "active",    label: "Active",         count: activeContracts.length },
-          { id: "ongoing",   label: "Ongoing",         count: ongoingContracts.length },
+          { id: "all",       label: "All",            count: contracts.length },
+          { id: "ongoing",   label: "Active ",         count: ongoingContracts.length },
           { id: "finished",  label: "Finished",        count: finishedContracts.length },
           { id: "submitted", label: "Submitted Jobs",  count: submittedJobs.length, alert: needsAttentionCount > 0 },
         ].map((tab) => (
@@ -2054,7 +2053,7 @@ export default function ClientContractsContent() {
                 setActiveTab("submitted");
               } else {
                 setActiveTab("contracts");
-                setView(tab.id as "active" | "ongoing" | "finished");
+                setView(tab.id as "all" | "ongoing" | "finished");
               }
             }}
             className={`relative py-3 text-[13px] font-semibold transition whitespace-nowrap ${
@@ -2209,7 +2208,7 @@ export default function ClientContractsContent() {
             <div className="flex min-h-[200px] flex-col items-center justify-center rounded-[14px] border border-dashed border-[#EAE7E2] bg-white px-5 py-10 text-center">
               <FileText className="h-10 w-10 text-[#F7931A]" />
               <p className="mt-3 text-[14px] font-semibold text-[#1a1a1a]">
-                No {view === "finished" ? "finished jobs" : `${view} contracts`} yet
+                No {view === "all" ? "contracts" : view === "finished" ? "finished jobs" : `${view} contracts`} yet
               </p>
               <Button
                 size="sm"

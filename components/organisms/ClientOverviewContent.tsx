@@ -8,7 +8,9 @@ import ClientContractCard from "@/components/molecules/ClientContractCard";
 import ClientProposalCard from "@/components/molecules/ClientProposalCard";
 import { firebaseAuth, firebaseDb } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
-import { collection, doc, getDoc, getDocs, limit, onSnapshot, query, where, orderBy } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, limit, onSnapshot, query, where } from "firebase/firestore";
+
+type FirestoreDateValue = string | number | Date | { seconds?: number } | null | undefined;
 
 const METRICS = [
   { label: "Active Contracts", value: "0", change: "None yet", tone: "neutral" as const },
@@ -34,13 +36,31 @@ type Contract = {
   startDate: string;
   dueDate: string;
   description: string;
+  paymentStatus?: "unfunded" | "invoice_created" | "funded" | "released" | "expired";
+  paymentInstallments?: number;
+  paymentCurrentInstallment?: number;
+  paymentReleasedInstallments?: number;
+  paymentTotalAmountSats?: number;
+  paymentTotalChargedSats?: number;
+  platformFeeSats?: number;
+  platformFeePercent?: number;
+  escrowFundedTotalSats?: number;
+  escrowReleasedSats?: number;
+  workStatus?: "not_started" | "in_progress" | "submitted" | "changes_requested" | "approved" | "completed";
   scopeItems?: string[];
   milestones?: Array<{
-    name: string;
-    amount: string;
-    deadline: string;
-    status: "Pending" | "In Progress" | "Approved";
+    index?: number;
+    title?: string;
+    name?: string;
+    amount?: string;
+    deadline?: string;
+    freelancerAmountSats?: number;
+    fundedSats?: number;
+    releasedSats?: number;
+    status: "Pending" | "In Progress" | "Approved" | "pending" | "funded" | "submitted" | "approved" | "released";
   }>;
+  createdAt?: FirestoreDateValue;
+  updatedAt?: FirestoreDateValue;
 };
 
 type ProposalItem = {
@@ -69,13 +89,14 @@ type JobPost = {
   description?: string;
   urgent?: boolean;
   jobType?: string;
-  createdAt?: any;
+  createdAt?: FirestoreDateValue;
 };
 
-const formatDate = (value: any) => {
+const formatDate = (value: FirestoreDateValue) => {
   if (!value) return "-";
   if (typeof value === "string") return value;
-  const date = value?.seconds ? new Date(value.seconds * 1000) : new Date(value);
+  const seconds = typeof value === "object" && "seconds" in value ? value.seconds : undefined;
+  const date = seconds ? new Date(seconds * 1000) : new Date(value as string | number | Date);
   return date.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" });
 };
 
@@ -89,6 +110,82 @@ const parseSats = (value: string) => {
   const cleaned = String(value ?? "").replace(/[^0-9.]/g, "");
   return cleaned ? Number(cleaned) : 0;
 };
+
+const getTimestampMs = (value: FirestoreDateValue) => {
+  if (!value) return 0;
+  if (typeof value === "number") return value;
+  const seconds = typeof value === "object" && "seconds" in value ? value.seconds : undefined;
+  if (seconds) return seconds * 1000;
+  const date = new Date(value as string | Date);
+  return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+};
+
+const isFinishedContract = (contract: Contract) =>
+  contract.status === "Completed" ||
+  contract.paymentStatus === "released" ||
+  contract.workStatus === "approved" ||
+  contract.workStatus === "completed";
+
+const getLiveContractStatus = (contract: Contract): ContractStatus => {
+  if (isFinishedContract(contract)) return "Completed";
+  if (contract.workStatus === "submitted" || contract.workStatus === "changes_requested") return "Review";
+  return "Active";
+};
+
+const getMilestoneLabel = (contract: Contract, fallbackIndex: number) => {
+  const milestones = contract.milestones ?? [];
+  const milestone =
+    milestones.find((item, index) => Number(item.index ?? index + 1) === fallbackIndex) ??
+    milestones[Math.max(0, fallbackIndex - 1)];
+  const title = milestone?.title || milestone?.name || contract.nextMilestone;
+  return title && title !== "-" ? title : `Milestone ${fallbackIndex}`;
+};
+
+const getLiveNextMilestone = (contract: Contract) => {
+  if (isFinishedContract(contract)) return "All milestones completed";
+
+  const total = Math.max(1, contract.paymentInstallments ?? contract.milestones?.length ?? 1);
+  const releasedCount =
+    contract.paymentReleasedInstallments ??
+    contract.milestones?.filter((milestone) => milestone.status === "released" || milestone.status === "approved").length ??
+    0;
+  const nextIndex = Math.min(total, releasedCount + 1);
+  const label = getMilestoneLabel(contract, nextIndex);
+
+  if (contract.workStatus === "submitted") return `${label} - submitted for review`;
+  if (contract.workStatus === "changes_requested") return `${label} - changes requested`;
+  if (contract.paymentStatus === "invoice_created") return `${label} - awaiting escrow funding`;
+  if (contract.paymentStatus === "funded" || contract.workStatus === "in_progress") return `${label} - in progress`;
+  return label;
+};
+
+const getLiveProgress = (contract: Contract) => {
+  if (isFinishedContract(contract)) return 100;
+
+  const total = Math.max(1, contract.paymentInstallments ?? contract.milestones?.length ?? 1);
+  const releasedCount =
+    contract.paymentReleasedInstallments ??
+    contract.milestones?.filter((milestone) => milestone.status === "released" || milestone.status === "approved").length ??
+    0;
+
+  const currentMilestoneWeight =
+    contract.workStatus === "submitted" ? 0.75 :
+    contract.workStatus === "changes_requested" ? 0.6 :
+    contract.workStatus === "in_progress" || contract.paymentStatus === "funded" ? 0.45 :
+    contract.paymentStatus === "invoice_created" ? 0.15 :
+    0;
+
+  const derivedProgress = Math.round(((releasedCount + currentMilestoneWeight) / total) * 100);
+  const storedProgress = Number.isFinite(contract.progress) ? contract.progress : 0;
+  return Math.max(0, Math.min(99, Math.max(storedProgress, derivedProgress)));
+};
+
+const hydrateContractProgress = (contract: Contract): Contract => ({
+  ...contract,
+  status: getLiveContractStatus(contract),
+  progress: getLiveProgress(contract),
+  nextMilestone: getLiveNextMilestone(contract),
+});
 
 export default function ClientOverviewContent() {
   const [displayName, setDisplayName] = useState('Client');
@@ -113,14 +210,19 @@ export default function ClientOverviewContent() {
   );
 
   const activeContracts = useMemo(
-    () => contracts.filter((contract) => contract.status === "Active"),
+    () => contracts.filter((contract) => !isFinishedContract(contract)),
     [contracts]
+  );
+
+  const latestActiveContracts = useMemo(
+    () => activeContracts.slice(0, 2),
+    [activeContracts]
   );
 
   const latestJobs = useMemo(() => {
     const sorted = [...jobs].sort((a, b) => {
-      const aTime = a.createdAt?.seconds ? a.createdAt.seconds : 0;
-      const bTime = b.createdAt?.seconds ? b.createdAt.seconds : 0;
+      const aTime = getTimestampMs(a.createdAt);
+      const bTime = getTimestampMs(b.createdAt);
       return bTime - aTime;
     });
     return sorted.slice(0, 2);
@@ -291,7 +393,7 @@ export default function ClientOverviewContent() {
                   data.freelancerName ?? ""
                 );
 
-                return {
+                return hydrateContractProgress({
                   id: docSnap.id,
                   title: data.title ?? "Contract",
                   freelancer,
@@ -306,17 +408,33 @@ export default function ClientOverviewContent() {
                   startDate: formatDate(data.startDate),
                   dueDate: formatDate(data.dueDate),
                   description: data.description ?? "-",
+                  paymentStatus: data.paymentStatus ?? "unfunded",
+                  paymentInstallments: Number(data.paymentInstallments ?? 1),
+                  paymentCurrentInstallment: Number(data.paymentCurrentInstallment ?? 1),
+                  paymentReleasedInstallments: Number(data.paymentReleasedInstallments ?? 0),
+                  paymentTotalAmountSats: Number(data.paymentTotalAmountSats ?? parseSats(data.budget) ?? 0),
+                  paymentTotalChargedSats: Number(data.paymentTotalChargedSats ?? 0),
+                  platformFeeSats: Number(data.platformFeeSats ?? 0),
+                  platformFeePercent: Number(data.platformFeePercent ?? 5),
+                  escrowFundedTotalSats: Number(data.escrowFundedTotalSats ?? 0),
+                  escrowReleasedSats: Number(data.escrowReleasedSats ?? 0),
+                  workStatus: data.workStatus ?? "not_started",
                   scopeItems: Array.isArray(data.scopeItems) ? data.scopeItems : [],
                   milestones: Array.isArray(data.milestones) ? data.milestones : [],
-                } satisfies Contract;
+                  createdAt: data.createdAt,
+                  updatedAt: data.updatedAt,
+                } satisfies Contract);
               })
             );
 
             if (!isActive) return;
-            setContracts(items);
+            const sortedItems = [...items].sort(
+              (a, b) => getTimestampMs(b.updatedAt || b.createdAt) - getTimestampMs(a.updatedAt || a.createdAt)
+            );
+            setContracts(sortedItems);
             setContractsLoading(false);
-            if (items.length) {
-              const latestActive = items.find((contract) => contract.status === "Active") ?? items[0];
+            if (sortedItems.length) {
+              const latestActive = sortedItems.find((contract) => !isFinishedContract(contract)) ?? sortedItems[0];
               if (latestActive?.id) {
                 setSelectedContractId((current) => current || latestActive.id);
               }
@@ -361,8 +479,8 @@ export default function ClientOverviewContent() {
           setJobsLoading(false);
           if (items.length) {
             const latest = [...items].sort((a, b) => {
-              const aTime = a.createdAt?.seconds ? a.createdAt.seconds : 0;
-              const bTime = b.createdAt?.seconds ? b.createdAt.seconds : 0;
+              const aTime = getTimestampMs(a.createdAt);
+              const bTime = getTimestampMs(b.createdAt);
               return bTime - aTime;
             })[0];
             if (latest?.id) {
@@ -451,8 +569,8 @@ export default function ClientOverviewContent() {
               <div className="rounded-[12px] border border-[#EAE7E2] bg-[#FFF6F2] p-4 text-[12px] text-[#8C4F00]">
                 {contractsError}
               </div>
-            ) : activeContracts.length > 0 ? (
-              activeContracts.map((contract) => (
+            ) : latestActiveContracts.length > 0 ? (
+              latestActiveContracts.map((contract) => (
                 <button
                   key={contract.id}
                   type="button"
@@ -467,7 +585,7 @@ export default function ClientOverviewContent() {
               ))
             ) : (
               <div className="rounded-[12px] border border-[#EAE7E2] bg-[#FAF8F5] p-4 text-[12px] text-[#6b6762]">
-                No active contracts yet.
+                No recent active contracts yet.
               </div>
             )}
           </div>
