@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { ChevronDown } from "lucide-react";
 import FreelancerSidebar from "@/components/molecules/FreelancerSidebar";
 import AISupportChat from "@/components/organisms/AISupportChat";
 
@@ -118,6 +119,7 @@ const FAQS = [
 
 export default function HelpCenterPage() {
   const [isAiActive, setIsAiActive] = useState(false);
+  const [openFaq, setOpenFaq] = useState(FAQS[0]?.q ?? "");
 
   return (
     <div className="min-h-screen bg-[#FCF9F7] font-sans text-[#1a1a1a]">
@@ -232,9 +234,31 @@ export default function HelpCenterPage() {
                   </div>
                   <div className="mt-4 space-y-3">
                     {FAQS.map((faq) => (
-                      <div key={faq.q} className="rounded-[12px] border border-[#EFECE7] bg-[#FAF8F5] p-4">
-                        <h3 className="text-[13px] font-black text-[#1a1a1a]">{faq.q}</h3>
-                        <p className="mt-2 text-[12px] leading-[1.7] text-[#6b6560]">{faq.a}</p>
+                      <div key={faq.q} className="overflow-hidden rounded-[12px] border border-[#EFECE7] bg-[#FAF8F5]">
+                        <button
+                          type="button"
+                          onClick={() => setOpenFaq((current) => (current === faq.q ? "" : faq.q))}
+                          aria-expanded={openFaq === faq.q}
+                          className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left transition hover:bg-white"
+                        >
+                          <span className="text-[13px] font-black text-[#1a1a1a]">{faq.q}</span>
+                          <ChevronDown
+                            className={`h-4 w-4 shrink-0 text-[#8C4F00] transition-transform ${
+                              openFaq === faq.q ? "rotate-180" : ""
+                            }`}
+                          />
+                        </button>
+                        <div
+                          className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+                            openFaq === faq.q ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                          }`}
+                        >
+                          <div className="overflow-hidden">
+                            <p className="border-t border-[#EFECE7] px-4 py-3 text-[12px] leading-[1.7] text-[#6b6560]">
+                              {faq.a}
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>

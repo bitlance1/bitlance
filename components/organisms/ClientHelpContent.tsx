@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ChevronDown } from "lucide-react";
 import Button from "@/components/atoms/Button";
 import AISupportChat from "@/components/organisms/AISupportChat";
 
@@ -49,6 +50,7 @@ const WORKFLOW = [
 
 export default function ClientHelpContent() {
   const [isAiActive, setIsAiActive] = useState(false);
+  const [openFaq, setOpenFaq] = useState(FAQS[0]?.q ?? "");
 
   if (isAiActive) {
     return (
@@ -96,9 +98,31 @@ export default function ClientHelpContent() {
           </div>
           <div className="flex flex-col gap-3">
             {FAQS.map((faq) => (
-              <div key={faq.q} className="rounded-[10px] border border-[#EFECE7] bg-[#FAF8F5] p-4">
-                <div className="text-[13px] font-semibold text-[#1a1a1a]">{faq.q}</div>
-                <div className="mt-2 text-[12px] leading-[1.7] text-[#6b6762]">{faq.a}</div>
+              <div key={faq.q} className="overflow-hidden rounded-[10px] border border-[#EFECE7] bg-[#FAF8F5]">
+                <button
+                  type="button"
+                  onClick={() => setOpenFaq((current) => (current === faq.q ? "" : faq.q))}
+                  aria-expanded={openFaq === faq.q}
+                  className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left transition hover:bg-white"
+                >
+                  <span className="text-[13px] font-semibold text-[#1a1a1a]">{faq.q}</span>
+                  <ChevronDown
+                    className={`h-4 w-4 shrink-0 text-[#8C4F00] transition-transform ${
+                      openFaq === faq.q ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+                <div
+                  className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+                    openFaq === faq.q ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                  }`}
+                >
+                  <div className="overflow-hidden">
+                    <div className="border-t border-[#EFECE7] px-4 py-3 text-[12px] leading-[1.7] text-[#6b6762]">
+                      {faq.a}
+                    </div>
+                  </div>
+                </div>
               </div>
             ))}
           </div>

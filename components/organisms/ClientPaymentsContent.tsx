@@ -7,6 +7,7 @@ import { firebaseAuth, firebaseDb } from "@/lib/firebase";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 
 type PaymentRow = {
+  rowKey: string;
   id: string;
   freelancer: string;
   amount: string;
@@ -53,13 +54,16 @@ const getSortTime = (value: any) => (toDate(value) ?? new Date(0)).getTime();
 const pluralizeMilestones = (count: number, label: string) =>
   `${count} ${label} milestone${count === 1 ? "" : "s"}`;
 
+const getPaymentKey = (payment: PaymentRow, index: number) =>
+  payment.rowKey || `${payment.status}-${payment.id}-${payment.txRef}-${index}`;
+
 export default function ClientPaymentsContent() {
   const [selectedId, setSelectedId] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [payments, setPayments] = useState(FALLBACK_PAYMENTS);
   const [loading, setLoading] = useState(true);
   const selectedPayment = useMemo(
-    () => payments.find((payment) => payment.id === selectedId) ?? payments[0],
+    () => payments.find((payment, index) => getPaymentKey(payment, index) === selectedId) ?? payments[0],
     [selectedId, payments]
   );
 
@@ -92,6 +96,7 @@ export default function ClientPaymentsContent() {
 
           milestones.forEach((milestone, index) => {
             const milestoneIndex = Number(milestone.index ?? index + 1);
+            const rowSuffix = `${contractId}-${milestoneIndex}-${index}`;
             const fundedSats = Number(milestone.fundedSats ?? 0);
             const releasedSats = Number(milestone.releasedSats ?? 0);
             const openEscrowSats = Math.max(0, fundedSats - releasedSats);
@@ -100,6 +105,7 @@ export default function ClientPaymentsContent() {
             if (openEscrowSats > 0) {
               const paymentDate = milestone.fundedAt || data.paymentReceivedAt || data.updatedAt || data.createdAt;
               processedPayments.push({
+                rowKey: `funded-${rowSuffix}`,
                 id: `INV-${contractCode}-${milestoneIndex}`,
                 freelancer,
                 amount: `${openEscrowSats.toLocaleString()} sats`,
@@ -117,6 +123,7 @@ export default function ClientPaymentsContent() {
             if (releasedSats > 0) {
               const paymentDate = milestone.releasedAt || data.updatedAt || data.createdAt;
               processedPayments.push({
+                rowKey: `released-${rowSuffix}`,
                 id: `REL-${contractCode}-${milestoneIndex}`,
                 freelancer,
                 amount: `${releasedSats.toLocaleString()} sats`,
@@ -140,6 +147,7 @@ export default function ClientPaymentsContent() {
 
             if (openEscrowSats > 0) {
               processedPayments.push({
+                rowKey: `funded-${contractId}-fallback`,
                 id: `INV-${contractCode}-1`,
                 freelancer,
                 amount: `${openEscrowSats.toLocaleString()} sats`,
@@ -156,6 +164,7 @@ export default function ClientPaymentsContent() {
 
             if (releasedTotal > 0) {
               processedPayments.push({
+                rowKey: `released-${contractId}-fallback`,
                 id: `REL-${contractCode}-1`,
                 freelancer,
                 amount: `${releasedTotal.toLocaleString()} sats`,
@@ -176,9 +185,11 @@ export default function ClientPaymentsContent() {
 
         setPayments(processedPayments);
         setSelectedId((current) =>
-          processedPayments.some((payment) => payment.id === current)
+          processedPayments.some((payment, index) => getPaymentKey(payment, index) === current)
             ? current
-            : processedPayments[0]?.id ?? ""
+            : processedPayments[0]
+              ? getPaymentKey(processedPayments[0], 0)
+              : ""
         );
         setLoading(false);
       });
@@ -251,12 +262,15 @@ export default function ClientPaymentsContent() {
           {loading ? (
             <div className="text-center py-8 text-[#6b6762]">Loading payments...</div>
           ) : payments.length > 0 ? (
-            payments.map((payment) => (
+            payments.map((payment, index) => {
+              const paymentKey = getPaymentKey(payment, index);
+
+              return (
             <button
-              key={payment.id}
+              key={paymentKey}
               type="button"
               onClick={() => {
-                setSelectedId(payment.id);
+                setSelectedId(paymentKey);
                 setIsModalOpen(true);
               }}
               className="text-left flex flex-col gap-2 rounded-[10px] border border-[#EFECE7] bg-[#FAF8F5] px-4 py-3 transition-all md:flex-row md:items-center md:justify-between hover:border-[#F2D8AA]"
@@ -271,7 +285,8 @@ export default function ClientPaymentsContent() {
                 {payment.status}
               </div>
             </button>
-          ))
+              );
+            })
           ) : (
             <div className="text-center py-8 text-[#6b6762]">No payments found.</div>
           )}
