@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import ChatHeader from '@/components/molecules/ChatHeader';
 import ChatMessage from '@/components/molecules/ChatMessage';
 import Button from '@/components/atoms/Button';
-import { Copy, Send, Paperclip, X, ChevronDown } from 'lucide-react';
+import { Copy, Send, Paperclip, X, ShieldCheck, BriefcaseBusiness } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
 interface Message {
@@ -77,6 +77,8 @@ interface ChatViewProps {
     milestoneTitles: string[];
   }) => Promise<string | void>;
   onVerifyPayment?: (paymentRequest?: string) => Promise<'funded' | 'pending' | 'expired'>;
+  onSubmitWork?: (payload: { description: string; link: string; file?: File | null }) => Promise<void>;
+  submittedWorkHref?: string;
 }
 
 export default function ChatView({
@@ -101,6 +103,8 @@ export default function ChatView({
   workStatus = 'not_started',
   onCreatePaymentInvoice,
   onVerifyPayment,
+  onSubmitWork,
+  submittedWorkHref,
 }: ChatViewProps) {
   const [newMessage, setNewMessage] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -115,7 +119,15 @@ export default function ChatView({
   const [activePaymentRequest, setActivePaymentRequest] = useState('');
   const [invoiceCopied, setInvoiceCopied] = useState(false);
   const [isPaymentExpanded, setIsPaymentExpanded] = useState(false);
+  const [isWorkExpanded, setIsWorkExpanded] = useState(false);
+  const [workDescription, setWorkDescription] = useState('');
+  const [workLink, setWorkLink] = useState('');
+  const [workFile, setWorkFile] = useState<File | null>(null);
+  const [isSubmittingWork, setIsSubmittingWork] = useState(false);
+  const [workError, setWorkError] = useState('');
+  const [workSuccess, setWorkSuccess] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const workFileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const hasPaidMilestone = paymentPaidAmountSats > 0 || paymentStatus === 'funded' || paymentStatus === 'released';
   const totalAmount = paymentTotalAmountSats || paymentAmountSats || 0;
@@ -154,6 +166,13 @@ export default function ChatView({
     (paymentStatus !== 'invoice_created' || !showCurrentInvoice) &&
     !(paymentStatus === 'funded' && activeMilestone >= activeInstallments) &&
     !(paymentStatus === 'funded' && hasOpenFundedMilestone);
+  const canSubmitWork =
+    viewerRole === 'freelancer' &&
+    !!onSubmitWork &&
+    paymentStatus === 'funded' &&
+    workStatus !== 'submitted' &&
+    workStatus !== 'approved' &&
+    workStatus !== 'completed';
   const splitAmount = (installment: number, count = selectedInstallments) => {
     if (!totalAmount) return 0;
     const base = Math.floor(totalAmount / count);
@@ -301,6 +320,33 @@ export default function ChatView({
     }
   };
 
+  const handleSubmitWork = async () => {
+    if (!onSubmitWork || isSubmittingWork) return;
+    const description = workDescription.trim();
+    const link = workLink.trim();
+    if (!description && !link && !workFile) {
+      setWorkError('Add a delivery note, link, or file before submitting.');
+      return;
+    }
+
+    try {
+      setIsSubmittingWork(true);
+      setWorkError('');
+      setWorkSuccess('');
+      await onSubmitWork({ description, link, file: workFile });
+      setWorkDescription('');
+      setWorkLink('');
+      setWorkFile(null);
+      if (workFileInputRef.current) workFileInputRef.current.value = '';
+      setWorkSuccess('Work submitted for client review.');
+      setIsWorkExpanded(false);
+    } catch (error) {
+      setWorkError(error instanceof Error ? error.message : 'Unable to submit work. Please try again.');
+    } finally {
+      setIsSubmittingWork(false);
+    }
+  };
+
   const paymentLabel =
     paymentStatus === 'funded'
       ? activeMilestone < activeInstallments
@@ -378,35 +424,46 @@ export default function ChatView({
               : 'Fund the milestone before work is submitted.';
 
   return (
-    <div className="h-full flex flex-col bg-[#FCF9F7CC]">
+    <div className="flex h-full min-h-0 flex-col bg-[#FCF9F7CC]">
       {/* Header */}
       <ChatHeader sender={message.sender} onBack={onBack} />
 
-      <div className="border-b border-[#e8e6e1] bg-white px-3 py-3 sm:px-5 space-y-3">
+      <div className="border-b border-[#e8e6e1] bg-white px-3 py-2 sm:px-5">
         {/* Payment Section - Collapsible */}
-        <div className="rounded-[12px] border border-[#EAE7E2] bg-[#F7F6F3]">
+        <div className="grid grid-cols-2 gap-2">
           {/* Payment Header - Always Visible */}
           <button
             type="button"
             onClick={() => setIsPaymentExpanded(!isPaymentExpanded)}
-            className="w-full p-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between hover:bg-[#f0ede8] transition-colors"
+            className="min-w-0 rounded-[14px] border border-[#EAE7E2] bg-[#F7F6F3] px-3 py-2.5 text-left transition-colors hover:bg-[#f0ede8]"
           >
-            <div className="flex-1 text-left">
-              <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#8C4F00]">
-                Bitlance Escrow
+            <div className="flex items-center gap-2">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#FFF4E6] text-[#8C4F00]">
+                <ShieldCheck className="h-4 w-4" />
+              </span>
+              <div className="min-w-0">
+                <div className="text-[9px] font-black uppercase tracking-[0.14em] text-[#8C4F00]">
+                  Escrow
+                </div>
+                <div className="mt-0.5 truncate text-[12px] font-black text-[#1a1a1a]">{paymentLabel}</div>
               </div>
-              <div className="mt-1 text-sm font-bold text-[#1a1a1a]">{paymentLabel}</div>
             </div>
-            <ChevronDown
-              className={`w-5 h-5 text-[#8C4F00] transition-transform flex-shrink-0 ${
-                isPaymentExpanded ? 'rotate-180' : ''
-              }`}
-            />
           </button>
 
           {/* Payment Details - Expandable */}
           {isPaymentExpanded && (
-            <div className="border-t border-[#EAE7E2] px-3 pb-3 pt-3 space-y-3">
+            <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/45 px-0 sm:items-center sm:px-4" onClick={() => setIsPaymentExpanded(false)}>
+            <div className="max-h-[88vh] w-full overflow-y-auto rounded-t-[22px] border border-[#EAE7E2] bg-white px-4 pb-5 pt-4 shadow-[0_20px_70px_rgba(0,0,0,0.25)] sm:max-w-xl sm:rounded-[18px] sm:px-5" onClick={(event) => event.stopPropagation()}>
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-[10px] font-black uppercase tracking-[0.16em] text-[#8C4F00]">Bitlance Escrow</div>
+                  <h3 className="mt-1 text-[18px] font-black text-[#1a1a1a]">{paymentLabel}</h3>
+                </div>
+                <button type="button" onClick={() => setIsPaymentExpanded(false)} className="rounded-full border border-[#EAE7E2] p-2 text-[#6b6762]">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="space-y-3">
               <div>
                 <p className="text-[11px] leading-5 text-[#6b6762]">{paymentCopy}</p>
                 {paymentAmountSats ? (
@@ -561,13 +618,110 @@ export default function ChatView({
                   </div>
                 </div>
               ) : null}
+              </div>
+            </div>
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setIsWorkExpanded(!isWorkExpanded)}
+            className="min-w-0 rounded-[14px] border border-[#EAE7E2] bg-[#F7F6F3] px-3 py-2.5 text-left transition-colors hover:bg-[#f0ede8]"
+          >
+            <div className="flex items-center gap-2">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#FFF4E6] text-[#8C4F00]">
+                <BriefcaseBusiness className="h-4 w-4" />
+              </span>
+              <div className="min-w-0">
+                <div className="text-[9px] font-black uppercase tracking-[0.14em] text-[#8C4F00]">
+                  Work
+                </div>
+                <div className="mt-0.5 truncate text-[12px] font-black text-[#1a1a1a]">{workLabel}</div>
+              </div>
+            </div>
+          </button>
+
+          {isWorkExpanded && (
+            <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/45 px-0 sm:items-center sm:px-4" onClick={() => setIsWorkExpanded(false)}>
+            <div className="max-h-[88vh] w-full overflow-y-auto rounded-t-[22px] border border-[#EAE7E2] bg-white px-4 pb-5 pt-4 shadow-[0_20px_70px_rgba(0,0,0,0.25)] sm:max-w-xl sm:rounded-[18px] sm:px-5" onClick={(event) => event.stopPropagation()}>
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-[10px] font-black uppercase tracking-[0.16em] text-[#8C4F00]">Work Delivery</div>
+                  <h3 className="mt-1 text-[18px] font-black text-[#1a1a1a]">{workLabel}</h3>
+                </div>
+                <button type="button" onClick={() => setIsWorkExpanded(false)} className="rounded-full border border-[#EAE7E2] p-2 text-[#6b6762]">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="space-y-3">
+              <p className="text-[11px] leading-5 text-[#6b6762]">{workCopy}</p>
+              {activeMilestoneData ? (
+                <p className="rounded-[10px] bg-white px-3 py-2 text-[11px] font-semibold text-[#8C4F00]">
+                  Current milestone: {activeMilestoneData.title}
+                </p>
+              ) : null}
+
+              {canSubmitWork ? (
+                <div className="rounded-[10px] border border-[#EAE7E2] bg-white p-3">
+                  <div className="grid gap-2">
+                    <textarea
+                      value={workDescription}
+                      onChange={(event) => setWorkDescription(event.target.value)}
+                      placeholder="Describe what you delivered..."
+                      rows={3}
+                      className="w-full rounded-[10px] border border-[#EAE7E2] bg-[#FAF8F5] px-3 py-2 text-[12px] text-[#1a1a1a] outline-none focus:ring-2 focus:ring-orange-400/20"
+                    />
+                    <input
+                      value={workLink}
+                      onChange={(event) => setWorkLink(event.target.value)}
+                      placeholder="Delivery link, preview URL, or repository link"
+                      className="w-full rounded-[10px] border border-[#EAE7E2] bg-[#FAF8F5] px-3 py-2 text-[12px] text-[#1a1a1a] outline-none focus:ring-2 focus:ring-orange-400/20"
+                    />
+                    <input
+                      ref={workFileInputRef}
+                      type="file"
+                      className="hidden"
+                      onChange={(event) => setWorkFile(event.target.files?.[0] ?? null)}
+                    />
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <button
+                        type="button"
+                        onClick={() => workFileInputRef.current?.click()}
+                        className="inline-flex items-center justify-center rounded-full border border-[#EAE7E2] bg-[#F7F6F3] px-3 py-2 text-[11px] font-semibold text-[#6b6762]"
+                      >
+                        <Paperclip className="mr-1.5 h-3.5 w-3.5" />
+                        {workFile ? workFile.name : 'Attach file'}
+                      </button>
+                      <Button
+                        size="sm"
+                        onClick={() => void handleSubmitWork()}
+                        disabled={isSubmittingWork}
+                        className="rounded-full"
+                      >
+                        {isSubmittingWork ? 'Submitting...' : workStatus === 'changes_requested' ? 'Resubmit Work' : 'Submit Work'}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {viewerRole === 'client' && workStatus === 'submitted' && submittedWorkHref ? (
+                <Button href={submittedWorkHref} size="sm" className="rounded-full">
+                  Review Submitted Work
+                </Button>
+              ) : null}
+
+              {workSuccess ? <p className="rounded-[10px] bg-green-50 px-3 py-2 text-[11px] text-green-700">{workSuccess}</p> : null}
+              {workError ? <p className="rounded-[10px] bg-red-50 px-3 py-2 text-[11px] text-red-700">{workError}</p> : null}
+              </div>
+            </div>
             </div>
           )}
         </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-1 sm:px-5 py-3 sm:py-6">
+      <div className="min-h-0 flex-1 overflow-y-auto px-1 py-3 sm:px-5 sm:py-6">
         {/* Date separator */}
         <div className="flex justify-center mb-4 sm:mb-6">
           <span className="bg-[#F3F1ED] text-[11px] sm:text-xs text-gray-500 px-3 sm:px-4 py-0.5 sm:py-1 rounded-full font-medium tracking-wide shadow-sm">TODAY</span>
@@ -579,7 +733,7 @@ export default function ChatView({
       </div>
 
       {/* Message Input */}
-      <div className="border-t border-[#e8e6e1] bg-white px-2 sm:px-4 py-2 sm:py-3">
+      <div className="border-t border-[#e8e6e1] bg-white px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 sm:px-4 sm:py-3">
         {selectedFile ? (
           <div className="mb-2 flex items-center justify-between rounded-lg border border-[#EAE7E2] bg-[#F7F6F3] px-3 py-2">
             <div className="min-w-0">
@@ -607,13 +761,13 @@ export default function ChatView({
           onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
         />
 
-        <div className="flex items-end gap-1 sm:gap-2">
+        <div className="flex items-end gap-1.5 sm:gap-2">
           {/* Attachment button */}
           <button
             type="button"
             onClick={openFilePicker}
             disabled={!canSend || isSending}
-            className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-[#F7F6F3] hover:text-gray-600 disabled:opacity-50 sm:h-11 sm:w-11"
           >
             <Paperclip className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
@@ -625,7 +779,7 @@ export default function ChatView({
               onChange={(e) => setNewMessage(e.target.value)}
               onKeyDown={handleKeyPress}
               placeholder="Type your message here..."
-              className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-[#F7F6F3] border border-[#ece7df] rounded-full text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-orange-400/20 resize-none min-h-[36px] sm:min-h-[44px] max-h-32"
+              className="w-full rounded-[22px] border border-[#ece7df] bg-[#F7F6F3] px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-orange-400/20 resize-none min-h-[40px] max-h-28 sm:min-h-[44px] sm:px-4 sm:py-3 sm:text-sm"
               rows={1}
               disabled={!canSend || isSending}
             />
@@ -635,7 +789,7 @@ export default function ChatView({
           <Button
             onClick={() => void handleSendMessage()}
             disabled={(!newMessage.trim() && !selectedFile) || !canSend || isSending}
-            className="p-2.5 sm:p-3 bg-[#CC7000] hover:bg-[#A85C00] text-white rounded-full disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
+            className="h-10 w-10 shrink-0 rounded-full bg-[#CC7000] p-0 text-white shadow-md hover:bg-[#A85C00] disabled:cursor-not-allowed disabled:opacity-50 sm:h-11 sm:w-11"
           >
             <Send className="w-4 h-4" />
           </Button>

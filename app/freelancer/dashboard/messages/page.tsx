@@ -136,6 +136,12 @@ const calculateInstallmentAmount = (total: number, installments: number, install
   return base + (safeInstallment <= remainder ? 1 : 0);
 };
 
+const parseSats = (value: unknown) => {
+  if (typeof value === "number") return value;
+  const cleaned = String(value ?? "").replace(/[^0-9]/g, "");
+  return cleaned ? Number(cleaned) : 0;
+};
+
 const buildMilestones = (jobAmount: number, totalClientPayable: number, count: number) =>
   Array.from({ length: count }, (_, index) => {
     const installment = index + 1;
@@ -454,6 +460,132 @@ export default function MessagesPage() {
     };
   };
 
+  const handleSubmitWorkFromMessage = async ({
+    description,
+    link,
+    file,
+  }: {
+    description: string;
+    link: string;
+    file?: File | null;
+  }) => {
+    if (!selectedConversation || !currentUserId) return;
+
+    const contractId =
+      selectedConversation.jobId && selectedConversation.freelancerId
+        ? `${selectedConversation.jobId}_${selectedConversation.freelancerId}`
+        : selectedConversation.id;
+    const contractSnap = await getDoc(doc(firebaseDb, "contracts", contractId));
+    const contractData = contractSnap.exists() ? (contractSnap.data() as any) : {};
+    const paymentStatus = selectedConversation.paymentStatus ?? contractData.paymentStatus ?? "unfunded";
+    const paymentInstallments = selectedConversation.paymentInstallments || Number(contractData.paymentInstallments ?? 1) || 1;
+    const releasedInstallments = Number(contractData.paymentReleasedInstallments ?? 0);
+    const nextMilestoneIndex = releasedInstallments + 1;
+    const jobAmount =
+      selectedConversation.paymentTotalAmountSats ||
+      Number(contractData.paymentTotalAmountSats ?? 0) ||
+      parseSats(contractData.budget) ||
+      selectedConversation.paymentAmountSats ||
+      0;
+    const platformFeeSats =
+      selectedConversation.platformFeeSats ||
+      Number(contractData.platformFeeSats ?? 0) ||
+      Math.ceil(jobAmount * (PLATFORM_FEE_PERCENT / 100));
+    const totalClientPayable =
+      selectedConversation.paymentTotalChargedSats ||
+      Number(contractData.paymentTotalChargedSats ?? 0) ||
+      jobAmount + platformFeeSats;
+    const existingMilestones = Array.isArray(selectedConversation.milestones) && selectedConversation.milestones.length
+      ? selectedConversation.milestones
+      : Array.isArray(contractData.milestones) && contractData.milestones.length
+        ? contractData.milestones
+        : buildMilestones(jobAmount, totalClientPayable, paymentInstallments);
+    const milestones = existingMilestones.map((milestone: any, index: number) => ({
+      index: Number(milestone.index ?? index + 1),
+      title: milestone.title || milestone.name || `Milestone ${index + 1}`,
+      freelancerAmountSats: Number(milestone.freelancerAmountSats ?? calculateInstallmentAmount(jobAmount, paymentInstallments, index + 1)),
+      platformFeeSats: Number(milestone.platformFeeSats ?? 0),
+      totalClientPaysSats: Number(milestone.totalClientPaysSats ?? calculateInstallmentAmount(totalClientPayable, paymentInstallments, index + 1)),
+      fundedSats: Number(milestone.fundedSats ?? 0),
+      releasedSats: Number(milestone.releasedSats ?? 0),
+      status: milestone.status ?? "pending",
+    })) as EscrowMilestone[];
+    const milestone =
+      milestones.find((item) => Number(item.index) === nextMilestoneIndex) ??
+      milestones[Math.max(0, nextMilestoneIndex - 1)];
+    const milestoneAmount = Number(milestone?.freelancerAmountSats ?? calculateInstallmentAmount(jobAmount, paymentInstallments, nextMilestoneIndex));
+    const fundedForMilestone = milestone
+      ? Number(milestone.fundedSats ?? 0) - Number(milestone.releasedSats ?? 0)
+      : milestoneAmount;
+
+    if (paymentStatus !== "funded" && paymentStatus !== "released") {
+      throw new Error("Escrow is not funded for this milestone yet.");
+    }
+    if (fundedForMilestone < milestoneAmount) {
+      throw new Error(`Milestone escrow is short by ${(milestoneAmount - fundedForMilestone).toLocaleString()} sats. Ask the client to fund escrow before submitting.`);
+    }
+
+    const attachment = file ? await uploadChatFile(file) : null;
+    const milestoneTitle = milestone?.title || `Milestone ${nextMilestoneIndex}`;
+    const contractTitle = selectedConversation.jobTitle || contractData.title || "Contract";
+    const contractUrl = `/client/dashboard/contracts?contract=${contractId}`;
+    const notificationText = `Work for "${contractTitle}" - Milestone ${nextMilestoneIndex}: ${milestoneTitle} has been submitted for review.${link ? ` Delivery link: ${link}.` : ""} [Check it out](${contractUrl})`;
+    const updatedMilestones = milestones.map((item) => {
+      if (Number(item.index) !== nextMilestoneIndex) return item;
+      return {
+        ...item,
+        status: "submitted" as const,
+        submittedAt: new Date().toISOString(),
+      };
+    });
+    const submissionData = {
+      contractId,
+      clientId: selectedConversation.clientId,
+      freelancerId: selectedConversation.freelancerId,
+      contractTitle,
+      milestoneIndex: nextMilestoneIndex,
+      milestoneTitle,
+      description: description || "Work submitted for review.",
+      link: link || "",
+      attachment,
+      submittedAt: serverTimestamp(),
+      status: "pending",
+    };
+    const contractUpdate = {
+      workStatus: "submitted",
+      submissionMessage: description || "Work submitted for review.",
+      submissionLink: link || "",
+      submissionAttachment: attachment,
+      milestones: updatedMilestones,
+      updatedAt: serverTimestamp(),
+    };
+
+    await Promise.all([
+      addDoc(collection(firebaseDb, "submitted_jobs"), submissionData),
+      setDoc(doc(firebaseDb, "contracts", contractId), contractUpdate, { merge: true }),
+      setDoc(
+        doc(firebaseDb, "conversations", selectedConversation.id),
+        {
+          ...contractUpdate,
+          "lastMessage.text": notificationText,
+          "lastMessage.senderId": selectedConversation.freelancerId,
+          "lastMessage.createdAt": serverTimestamp(),
+          [`unread.${selectedConversation.clientId}`]: increment(1),
+          [`unread.${selectedConversation.freelancerId}`]: 0,
+        },
+        { merge: true }
+      ),
+      addDoc(collection(firebaseDb, "conversations", selectedConversation.id, "messages"), {
+        senderId: selectedConversation.freelancerId,
+        senderRole: "freelancer",
+        text: notificationText,
+        messageType: "work_submission",
+        attachment: attachment ?? null,
+        createdAt: serverTimestamp(),
+      }),
+    ]);
+  };
+
   const handleVerifyPayment = async (
     paymentRequestOverride?: string
   ): Promise<"funded" | "pending" | "expired"> => {
@@ -616,7 +748,7 @@ export default function MessagesPage() {
         <FreelancerSidebar active="/freelancer/dashboard/messages" />
 
         <div className="flex-1 mt-[50px] md:mt-[0px] lg:ml-0">
-          <div className="h-screen flex pt-4 md:pt-0">
+          <div className="flex h-[100dvh] pt-4 md:pt-0">
             <div
               className={`
               w-full md:w-1/3 border-r border-[#e8e6e1]  bg-[#F6F3F1]
@@ -633,7 +765,7 @@ export default function MessagesPage() {
 
             <div
               className={`
-              w-full md:w-2/3 bg-[#F7F6F3]
+              h-full w-full md:w-2/3 bg-[#F7F6F3]
               ${selectedChat ? "block" : "hidden md:block"}
               pt-2 md:pt-0
             `}
@@ -659,6 +791,7 @@ export default function MessagesPage() {
                   milestones={selectedConversation.milestones}
                   paymentRequest={selectedConversation.paymentRequest}
                   workStatus={selectedConversation.workStatus}
+                  onSubmitWork={handleSubmitWorkFromMessage}
                   onVerifyPayment={handleVerifyPayment}
                 />
               ) : (

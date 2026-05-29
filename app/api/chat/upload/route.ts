@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 
 export const runtime = "nodejs";
 
-const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024;
 const DEFAULT_FIREBASE_WEB_API_KEY = "AIzaSyCr_rWHnm0w79J63dm69DEMkjawulE5Ovk";
 
 async function getUidFromIdToken(authHeader: string | null): Promise<string | null> {
@@ -53,12 +53,13 @@ export async function POST(request: Request) {
     }
 
     if (file.size > MAX_FILE_SIZE_BYTES) {
-      return NextResponse.json({ error: "File is larger than 10MB." }, { status: 400 });
+      return NextResponse.json({ error: "File is larger than 100MB." }, { status: 400 });
     }
 
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-    const publicId = randomUUID();
+    const safeName = file.name.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 60);
+    const publicId = `${randomUUID()}_${safeName || "file"}`;
 
     const uploadResult = await new Promise<UploadApiResponse>((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
@@ -66,6 +67,7 @@ export async function POST(request: Request) {
           folder: `bitlance/chat/${uid}`,
           public_id: publicId,
           resource_type: "auto",
+          filename_override: file.name,
           overwrite: false,
         },
         (error, result) => {

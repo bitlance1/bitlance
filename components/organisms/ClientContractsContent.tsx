@@ -1841,6 +1841,19 @@ export default function ClientContractsContent() {
 
   const needsAttentionCount = submittedJobs.filter((j) => j.status === "pending").length;
 
+  useEffect(() => {
+    if (hasOpenedFromParam || loading) return;
+    const contractId = searchParams.get("contract");
+    if (!contractId) return;
+    const contract = contracts.find((item) => item.id === contractId);
+    if (!contract) return;
+
+    setSelectedId(contract.id);
+    setActiveTab("contracts");
+    setIsModalOpen(true);
+    setHasOpenedFromParam(true);
+  }, [contracts, hasOpenedFromParam, loading, searchParams]);
+
   const handleApproveSubmission = async (jobId: string) => {
     setApprovalErrorMessage("");
     setPendingApprovalJobId(jobId);
