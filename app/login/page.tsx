@@ -43,18 +43,22 @@ export default function LoginPage() {
         if (clientSnap.exists()) role = 'client';
       }
 
-      if (role === 'freelancer') {
-        router.push('/freelancer/dashboard');
+      if (role === 'admin') {
+        router.push('/admin/dashboard');
         return;
       }
       if (role === 'client') {
         router.push('/client/dashboard');
         return;
       }
+      if (role === 'freelancer') {
+        router.push('/freelancer/dashboard');
+        return;
+      }
 
       setErrorMessage('Account role not found. Please contact support.');
-    } catch (error: any) {
-      setErrorMessage(error?.message ?? 'Failed to sign in.');
+    } catch (error: unknown) {
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to sign in.');
     } finally {
       setIsSubmitting(false);
     }
@@ -178,7 +182,7 @@ export default function LoginPage() {
             {/* Signup Link */}
             <div className="text-center">
               <p className="text-[#666] text-sm">
-                Don't have an account?{' '}
+                Don&apos;t have an account?{' '}
                 <Link
                   href="/signup"
                   className="text-[#F7931A] font-bold hover:underline"

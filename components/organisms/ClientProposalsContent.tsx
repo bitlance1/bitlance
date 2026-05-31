@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Button from "@/components/atoms/Button";
 import { firebaseAuth, firebaseDb } from "@/lib/firebase";
+import { sendUserNotification } from "@/lib/notifications";
 import {
   arrayUnion,
   collection,
@@ -302,6 +303,13 @@ export default function ClientProposalsContent() {
       });
 
       await batch.commit();
+      void sendUserNotification({
+        userId: proposal.freelancerId,
+        title: "Proposal accepted",
+        body: `Your proposal for "${job.title}" was accepted. Contract and chat are ready.`,
+        url: `/freelancer/dashboard/messages?chat=${conversationId}`,
+        tag: `proposal-accepted-${proposal.id}`,
+      }).catch(console.error);
       triggerToast(`${freelancerIdentity.name} accepted. Contract and chat are ready.`);
     } finally {
       setActionId("");
@@ -315,6 +323,13 @@ export default function ClientProposalsContent() {
         status: "rejected",
         updatedAt: serverTimestamp(),
       });
+      void sendUserNotification({
+        userId: proposal.freelancerId,
+        title: "Proposal rejected",
+        body: `Your proposal for "${proposal.jobTitle}" was not selected.`,
+        url: "/freelancer/dashboard/proposals",
+        tag: `proposal-rejected-${proposal.id}`,
+      }).catch(console.error);
       triggerToast(`${proposal.freelancerName} rejected.`);
     } finally {
       setActionId("");

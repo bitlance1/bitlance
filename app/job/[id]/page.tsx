@@ -16,6 +16,7 @@ import {
   ArrowLeft
 } from 'lucide-react';
 import { firebaseAuth, firebaseDb } from '@/lib/firebase';
+import { sendUserNotification } from '@/lib/notifications';
 import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, increment, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
 
 const digitsOnly = (value: string) => value.replace(/\D/g, '');
@@ -570,6 +571,13 @@ export default function JobDetailPage() {
                           proposals: increment(1),
                           updatedAt: serverTimestamp(),
                         });
+                        void sendUserNotification({
+                          userId: job.clientId ?? '',
+                          title: 'New proposal received',
+                          body: `${freelancerName} applied for "${job.title ?? 'your job'}".`,
+                          url: '/client/dashboard/proposals',
+                          tag: `proposal-${job.id}-${user.uid}`,
+                        }).catch(console.error);
 
                         setSubmitState('done');
                         setCoverLetter('');

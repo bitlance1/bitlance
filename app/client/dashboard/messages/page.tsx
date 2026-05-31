@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import ClientSidebar from "@/components/molecules/ClientSidebar";
 import MessagesList from "@/components/organisms/MessagesList";
 import ChatView from "@/components/organisms/ChatView";
+import { sendUserNotification } from "@/lib/notifications";
 import { firebaseAuth, firebaseDb } from "@/lib/firebase";
 import {
   addDoc,
@@ -462,6 +463,13 @@ export default function ClientMessagesPage() {
       [`unread.${otherId}`]: increment(1),
       updatedAt: serverTimestamp(),
     });
+    void sendUserNotification({
+      userId: otherId,
+      title: `New message from ${selectedConversation.clientName || "Client"}`,
+      body: messageText,
+      url: `/freelancer/dashboard/messages?chat=${selectedConversation.id}`,
+      tag: `message-${selectedConversation.id}`,
+    }).catch(console.error);
   };
 
   const handleCreatePaymentInvoice = async ({
@@ -624,6 +632,13 @@ export default function ClientMessagesPage() {
         createdAt: serverTimestamp(),
       }),
     ]);
+    void sendUserNotification({
+      userId: selectedConversation.freelancerId,
+      title: "Escrow invoice created",
+      body: `${invoiceMessage} Open the chat for payment status.`,
+      url: `/freelancer/dashboard/messages?chat=${selectedConversation.id}`,
+      tag: `invoice-${selectedConversation.id}`,
+    }).catch(console.error);
 
     return paymentRequest;
   };
@@ -767,6 +782,13 @@ export default function ClientMessagesPage() {
           { merge: true }
         ),
       ]);
+      void sendUserNotification({
+        userId: selectedConversation.freelancerId,
+        title: "Escrow funded",
+        body: fundedMessage,
+        url: `/freelancer/dashboard/messages?chat=${selectedConversation.id}`,
+        tag: `funded-${selectedConversation.id}`,
+      }).catch(console.error);
 
       return "funded";
     }

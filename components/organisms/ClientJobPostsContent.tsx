@@ -6,6 +6,7 @@ import Button from "@/components/atoms/Button";
 import ClientJobPostCard from "@/components/molecules/ClientJobPostCard";
 import ClientProposalCard from "@/components/molecules/ClientProposalCard";
 import { firebaseAuth, firebaseDb } from "@/lib/firebase";
+import { sendUserNotification } from "@/lib/notifications";
 import { onAuthStateChanged } from "firebase/auth";
 import {
   addDoc,
@@ -718,6 +719,16 @@ export default function ClientJobPostsContent() {
                     updatedAt: serverTimestamp(),
                   });
                   await batch.commit();
+                  selected.forEach((proposal) => {
+                    const conversationId = createConversationId(selectedJob.id, proposal.freelancerId);
+                    void sendUserNotification({
+                      userId: proposal.freelancerId,
+                      title: "Proposal accepted",
+                      body: `Your proposal for "${selectedJob.title}" was accepted. Contract and chat are ready.`,
+                      url: `/freelancer/dashboard/messages?chat=${conversationId}`,
+                      tag: `proposal-accepted-${proposal.id}`,
+                    }).catch(console.error);
+                  });
                   setSelectedProposals({});
                   triggerToast(`Successfully hired ${freelancerNames.join(", ")}!`);
                 }}

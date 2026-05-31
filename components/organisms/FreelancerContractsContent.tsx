@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Button from "@/components/atoms/Button";
-import { Briefcase, Calendar, ClipboardCheck, FileText } from "lucide-react";
+import { Calendar, Search } from "lucide-react";
 import { firebaseAuth, firebaseDb } from "@/lib/firebase";
+import { sendUserNotification } from "@/lib/notifications";
 import { onAuthStateChanged } from "firebase/auth";
 import { addDoc, collection, doc, getDoc, getDocs, increment, limit, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where } from "firebase/firestore";
 
@@ -343,6 +344,13 @@ export default function FreelancerContractsContent() {
           createdAt: serverTimestamp(),
         }),
       ]);
+      void sendUserNotification({
+        userId: selectedContract.clientId,
+        title: "Work submitted for review",
+        body: notificationText,
+        url: `/client/dashboard/contracts?contract=${selectedContract.id}`,
+        tag: `work-submission-${selectedContract.id}`,
+      }).catch(console.error);
 
       setSubmissionSuccess("Work submitted for review.");
       setWorkMessage("");
@@ -612,6 +620,13 @@ export default function FreelancerContractsContent() {
           createdAt: serverTimestamp(),
         }),
       ]);
+      void sendUserNotification({
+        userId: editingSubmissionContract.clientId || "",
+        title: "Work resubmitted",
+        body: messageText,
+        url: `/client/dashboard/contracts?contract=${editingSubmissionContract.id}`,
+        tag: `work-resubmission-${editingSubmissionContract.id}`,
+      }).catch(console.error);
 
       setEditSubmissionSuccess("Submission updated and sent back to the client.");
       setEditingSubmissionId(null);
@@ -627,14 +642,33 @@ export default function FreelancerContractsContent() {
 
   return (
     <section className="w-full">
+      <div className="rounded-[8px] border border-[#EAE7E2] bg-white px-4 py-4 shadow-[0_8px_18px_rgba(26,26,26,0.08)] sm:px-5">
+        <div className="text-[10px] font-black uppercase tracking-[0.18em] text-[#8C4F00]">
+          Contracts
+        </div>
+        <h1 className="mt-2 text-[20px] font-black tracking-[-0.02em] text-[#1a1a1a]">
+          Your Contract Tab
+        </h1>
+        <p className="mt-2 text-[12px] leading-[1.7] text-[#4d4741]">
+          Track your active, submitted, and finished works
+        </p>
+      </div>
 
       {/* ── TABS ─────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-6 border-b border-[#EAE7E2] px-1">
+      <div className="mt-9 rounded-[8px] border border-[#EAE7E2] bg-[#FCF9F7] px-4 py-4 shadow-[0_8px_18px_rgba(26,26,26,0.06)] sm:px-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <div className="text-[10px] font-black uppercase tracking-[0.16em] text-[#8C4F00]">
+              Filters
+            </div>
+            <p className="mt-1 text-[12px] text-[#4d4741]">View by contract status.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
         {[
           { id: "all",      label: "All",           count: contracts.length },
           { id: "ongoing",  label: "Active",        count: ongoingContracts.length },
+          { id: "submitted", label: "Submitted",     count: submittedJobs.length, alert: needsAttentionCount > 0 },
           { id: "finished", label: "Finished",       count: finishedContracts.length },
-          { id: "submitted", label: "Submitted Jobs", count: submittedJobs.length, alert: needsAttentionCount > 0 },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -647,29 +681,27 @@ export default function FreelancerContractsContent() {
                 setView(tab.id as "all" | "ongoing" | "finished");
               }
             }}
-            className={`relative py-3 text-[13px] font-semibold transition whitespace-nowrap ${
+            className={`inline-flex min-h-7 items-center rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.02em] transition whitespace-nowrap ${
               (tab.id === "submitted" ? activeTab === "submitted" : activeTab === "contracts" && view === tab.id)
-                ? "text-[#F7931A]"
-                : "text-[#8f8780] hover:text-[#1a1a1a]"
+                ? "border-[#8C4F00] bg-white text-[#8C4F00] shadow-sm"
+                : "border-[#D8D2CC] bg-white text-[#1a1a1a] hover:border-[#8C4F00]"
             }`}
           >
             <span className="inline-flex items-center gap-1.5">
               {tab.label}
-              {tab.count > 0 && (
+              {tab.count > 0 ? (
                 <span className="rounded-full bg-[#F5F3EF] px-1.5 py-0.5 text-[9px] font-bold text-[#8f8780]">
                   {tab.count}
                 </span>
-              )}
+              ) : null}
               {tab.alert && (
                 <span className="inline-flex h-2 w-2 rounded-full bg-[#F7931A]" />
               )}
             </span>
-            {(tab.id === "submitted" ? activeTab === "submitted" : activeTab === "contracts" && view === tab.id) && (
-              <span className="absolute bottom-0 left-0 h-[2px] w-full rounded-full bg-[#F7931A]" />
-            )}
           </button>
         ))}
-      </div>
+          </div>
+        </div>
 
       {/* ── CONTRACTS GRID ───────────────────────────────────────────── */}
       {activeTab === "contracts" && (
@@ -793,16 +825,20 @@ export default function FreelancerContractsContent() {
                       <button
                         type="button"
                         onClick={() => { setSelectedId(contract.id); setIsModalOpen(true); }}
-                        className="rounded-[10px] border border-[#F7931A] bg-white py-3 text-[12px] font-black text-[#F7931A] transition hover:bg-[#FFF8EF]"
+                        className="rounded-[10px] border border-[#1a2332] bg-white py-3 text-[12px] font-black text-[black] transition hover:bg-[#FFF8EF]"
                       >
                         View Contract
                       </button>
                       <button
                         type="button"
-                        onClick={() => { setSelectedId(contract.id); setIsModalOpen(true); }}
-                        className="rounded-[10px] bg-gradient-to-r from-orange-600 to-orange-400 py-3 text-[12px] font-black text-white transition hover:opacity-90"
+                        onClick={() => {
+                          if (!contract.jobId || !contract.freelancerId) return;
+                          const conversationId = createConversationId(contract.jobId, contract.freelancerId);
+                          router.push(`/freelancer/dashboard/messages?chat=${conversationId}`);
+                        }}
+                        className="rounded-[10px] border border-[#1a2332] bg-[#1a2332] px-2 py-3 text-[11px] font-black leading-tight text-white transition hover:bg-[#0f1a26] sm:text-[12px]"
                       >
-                        Upload Deliverable
+                        Message Client
                       </button>
                     </div>
                   </div>
@@ -810,19 +846,10 @@ export default function FreelancerContractsContent() {
               })}
             </div>
           ) : (
-            <div className="flex min-h-[200px] flex-col items-center justify-center rounded-[14px] border border-dashed border-[#EAE7E2] bg-white px-5 py-10 text-center">
-              <FileText className="h-10 w-10 text-[#F7931A]" />
-              <p className="mt-3 text-[14px] font-semibold text-[#1a1a1a]">
-                No {view === "all" ? "contracts" : view === "finished" ? "finished jobs" : `${view} contracts`} yet
-              </p>
-              <Button
-                size="sm"
-                className="mt-4 rounded-full"
-                onClick={() => router.push("/freelancer/dashboard/job-feed")}
-              >
-                <Briefcase className="mr-2 h-4 w-4" />
-                Find Tasks
-              </Button>
+            <div className="mx-auto mt-8 flex min-h-[166px] w-full max-w-5xl flex-col items-center justify-center rounded-[8px] border border-[#EAE7E2] bg-white px-5 py-10 text-center shadow-[0_6px_14px_rgba(26,26,26,0.08)]">
+              <Search className="h-11 w-11 text-[#8C4F00]" strokeWidth={1.2} />
+              <p className="mt-4 text-[16px] font-black text-[#1a1a1a]">No Contract Found</p>
+              <p className="mt-1 text-[12px] text-[#6b6762]">You don't have any contract yet</p>
             </div>
           )}
         </div>
@@ -884,7 +911,7 @@ export default function FreelancerContractsContent() {
                     <button
                       type="button"
                       onClick={() => setSelectedSubmissionId(job.id)}
-                      className="mt-4 w-full rounded-[10px] bg-gradient-to-r from-orange-600 to-orange-400 py-3 text-[12px] font-black uppercase tracking-[0.1em] text-white transition "
+                      className="mt-4 w-full rounded-[10px] border border-[#1a2332] bg-[#1a2332] py-3 text-[12px] font-black uppercase tracking-[0.1em] text-white transition hover:bg-[#0f1a26]"
                     >
                       View Details
                     </button>
@@ -893,14 +920,16 @@ export default function FreelancerContractsContent() {
               })}
             </div>
           ) : (
-            <div className="flex min-h-[200px] flex-col items-center justify-center rounded-[14px] border border-dashed border-[#EAE7E2] bg-white px-5 py-10 text-center">
-              <ClipboardCheck className="h-10 w-10 text-[#F7931A]" />
-              <p className="mt-3 text-[14px] font-semibold text-[#1a1a1a]">No submitted jobs yet</p>
-              <p className="mt-1 text-[12px] text-[#999]">Submitted work will appear here once you submit a milestone.</p>
+            <div className="mx-auto mt-8 flex min-h-[166px] w-full max-w-5xl flex-col items-center justify-center rounded-[8px] border border-[#EAE7E2] bg-white px-5 py-10 text-center shadow-[0_6px_14px_rgba(26,26,26,0.08)]">
+              <Search className="h-11 w-11 text-[#8C4F00]" strokeWidth={1.2} />
+              <p className="mt-4 text-[16px] font-black text-[#1a1a1a]">No Contract Found</p>
+              <p className="mt-1 text-[12px] text-[#6b6762]">You don't have any submitted work yet</p>
             </div>
           )}
         </div>
       )}
+
+      </div>
 
       {selectedSubmission && (
         <div className="fixed inset-0 z-[75] flex items-end justify-center px-2 py-2 sm:items-center sm:px-4 sm:py-4">

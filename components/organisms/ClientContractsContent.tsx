@@ -1518,8 +1518,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Button from "@/components/atoms/Button";
-import { Briefcase, ClipboardCheck, FileText, Calendar } from "lucide-react";
+import { Calendar, Search } from "lucide-react";
 import { firebaseAuth, firebaseDb } from "@/lib/firebase";
+import { sendUserNotification } from "@/lib/notifications";
 import { onAuthStateChanged } from "firebase/auth";
 import {
   addDoc,
@@ -1945,6 +1946,7 @@ export default function ClientContractsContent() {
 
       try {
         const conversationDoc = await getConversationForContract(contract);
+        const approvalMessage = `Milestone ${nextMilestoneIndex}${milestone?.title || milestone?.name ? `: ${milestone?.title || milestone?.name}` : ""} approved and payment of ${milestoneAmount} sats sent to freelancer.`;
         if (conversationDoc) {
           await updateDoc(conversationDoc.ref, {
             workStatus: contractUpdate.workStatus,
@@ -1952,12 +1954,19 @@ export default function ClientContractsContent() {
             escrowReleasedSats: contractUpdate.escrowReleasedSats,
             milestones: updatedMilestones,
             updatedAt: serverTimestamp(),
-            "lastMessage.text": `Milestone ${nextMilestoneIndex}${milestone?.title || milestone?.name ? `: ${milestone?.title || milestone?.name}` : ""} approved and payment of ${milestoneAmount} sats sent to freelancer.`,
+            "lastMessage.text": approvalMessage,
             "lastMessage.senderId": "system",
             "lastMessage.createdAt": serverTimestamp(),
             [`unread.${contract.freelancerId}`]: increment(1),
           });
         }
+        void sendUserNotification({
+          userId: contract.freelancerId || "",
+          title: "Milestone approved",
+          body: approvalMessage,
+          url: "/freelancer/dashboard/contracts",
+          tag: `approval-${contract.id}-${nextMilestoneIndex}`,
+        }).catch(console.error);
       } catch (e) { console.error("Error updating conversation payment status:", e); }
 
       setShowPaymentModal(false);
@@ -2002,6 +2011,13 @@ export default function ClientContractsContent() {
         setDoc(doc(firebaseDb, "conversations", conversationId), { workStatus: "changes_requested", revisionMessage: note, milestones: updatedMilestones, "lastMessage.text": messageText, "lastMessage.senderId": "system", "lastMessage.createdAt": serverTimestamp(), [`unread.${contract.freelancerId}`]: increment(1), updatedAt: serverTimestamp() }, { merge: true }),
         addDoc(collection(firebaseDb, "conversations", conversationId, "messages"), { senderId: "system", senderRole: "system", text: messageText, messageType: "changes_requested", createdAt: serverTimestamp() }),
       ]);
+      void sendUserNotification({
+        userId: contract.freelancerId || "",
+        title: "Changes requested",
+        body: messageText,
+        url: "/freelancer/dashboard/contracts",
+        tag: `changes-${contract.id}-${nextMilestoneIndex}`,
+      }).catch(console.error);
 
       setPendingChangeJobId(null);
       setChangeRequestNote("");
@@ -2049,14 +2065,33 @@ export default function ClientContractsContent() {
 
   return (
     <section className="w-full">
+      <div className="rounded-[8px] border border-[#EAE7E2] bg-white px-4 py-4 shadow-[0_8px_18px_rgba(26,26,26,0.08)] sm:px-5">
+        <div className="text-[10px] font-black uppercase tracking-[0.18em] text-[#8C4F00]">
+          Contracts
+        </div>
+        <h1 className="mt-2 text-[20px] font-black tracking-[-0.02em] text-[#1a1a1a]">
+          Your Contract Tab
+        </h1>
+        <p className="mt-2 text-[12px] leading-[1.7] text-[#4d4741]">
+          Track your active, submitted, and finished works
+        </p>
+      </div>
 
       {/* ── TABS ── */}
-      <div className="flex items-center gap-6 border-b border-[#EAE7E2] px-1">
+      <div className="mt-9 rounded-[8px] border border-[#EAE7E2] bg-[#FCF9F7] px-4 py-4 shadow-[0_8px_18px_rgba(26,26,26,0.06)] sm:px-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <div className="text-[10px] font-black uppercase tracking-[0.16em] text-[#8C4F00]">
+              Filters
+            </div>
+            <p className="mt-1 text-[12px] text-[#4d4741]">View by contract status.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
         {[
           { id: "all",       label: "All",            count: contracts.length },
-          { id: "ongoing",   label: "Active ",         count: ongoingContracts.length },
+          { id: "ongoing",   label: "Active",          count: ongoingContracts.length },
+          { id: "submitted", label: "Submitted",       count: submittedJobs.length, alert: needsAttentionCount > 0 },
           { id: "finished",  label: "Finished",        count: finishedContracts.length },
-          { id: "submitted", label: "Submitted Jobs",  count: submittedJobs.length, alert: needsAttentionCount > 0 },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -2069,31 +2104,29 @@ export default function ClientContractsContent() {
                 setView(tab.id as "all" | "ongoing" | "finished");
               }
             }}
-            className={`relative py-3 text-[13px] font-semibold transition whitespace-nowrap ${
+            className={`inline-flex min-h-7 items-center rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.02em] transition whitespace-nowrap ${
               (tab.id === "submitted" ? activeTab === "submitted" : activeTab === "contracts" && view === tab.id)
-                ? "text-[#F7931A]"
-                : "text-[#8f8780] hover:text-[#1a1a1a]"
+                ? "border-[#8C4F00] bg-white text-[#8C4F00] shadow-sm"
+                : "border-[#D8D2CC] bg-white text-[#1a1a1a] hover:border-[#8C4F00]"
             }`}
           >
             <span className="inline-flex items-center gap-1.5">
               {tab.label}
-              {tab.count > 0 && (
+              {tab.count > 0 ? (
                 <span className="rounded-full bg-[#F5F3EF] px-1.5 py-0.5 text-[9px] font-bold text-[#8f8780]">
                   {tab.count}
                 </span>
-              )}
+              ) : null}
 
               
               {tab.alert && (
                 <span className="inline-flex h-2 w-2 rounded-full bg-[#F7931A]" />
               )}
             </span>
-            {(tab.id === "submitted" ? activeTab === "submitted" : activeTab === "contracts" && view === tab.id) && (
-              <span className="absolute bottom-0 left-0 h-[2px] w-full rounded-full bg-[#F7931A]" />
-            )}
           </button>
         ))}
-      </div>
+          </div>
+        </div>
 
       {/* ── CONTRACTS GRID ── */}
       {activeTab === "contracts" && (
@@ -2218,19 +2251,10 @@ export default function ClientContractsContent() {
               })}
             </div> 
           ) : (
-            <div className="flex min-h-[200px] flex-col items-center justify-center rounded-[14px] border border-dashed border-[#EAE7E2] bg-white px-5 py-10 text-center">
-              <FileText className="h-10 w-10 text-[#F7931A]" />
-              <p className="mt-3 text-[14px] font-semibold text-[#1a1a1a]">
-                No {view === "all" ? "contracts" : view === "finished" ? "finished jobs" : `${view} contracts`} yet
-              </p>
-              <Button
-                size="sm"
-                className="mt-4 rounded-full bg-[#F7931A] text-[#1a1a1a] hover:bg-[#E9850F]"
-                onClick={() => router.push("/client/dashboard/job-posts")}
-              >
-                <Briefcase className="mr-2 h-4 w-4" />
-                Post a Job
-              </Button>
+            <div className="mx-auto mt-8 flex min-h-[166px] w-full max-w-5xl flex-col items-center justify-center rounded-[8px] border border-[#EAE7E2] bg-white px-5 py-10 text-center shadow-[0_6px_14px_rgba(26,26,26,0.08)]">
+              <Search className="h-11 w-11 text-[#8C4F00]" strokeWidth={1.2} />
+              <p className="mt-4 text-[16px] font-black text-[#1a1a1a]">No Contract Found</p>
+              <p className="mt-1 text-[12px] text-[#6b6762]">You don't have any contract yet</p>
             </div>
           )}
         </div>
@@ -2332,16 +2356,18 @@ export default function ClientContractsContent() {
               })}
             </div>
           ) : (
-            <div className="flex min-h-[200px] flex-col items-center justify-center rounded-[14px] border border-dashed border-[#EAE7E2] bg-white px-5 py-10 text-center">
-              <ClipboardCheck className="h-10 w-10 text-[#F7931A]" />
-              <p className="mt-3 text-[14px] font-semibold text-[#1a1a1a]">No submitted jobs yet</p>
-              <p className="mt-1 text-[12px] text-[#999]">Freelancer submissions will appear here for your review.</p>
+            <div className="mx-auto mt-8 flex min-h-[166px] w-full max-w-5xl flex-col items-center justify-center rounded-[8px] border border-[#EAE7E2] bg-white px-5 py-10 text-center shadow-[0_6px_14px_rgba(26,26,26,0.08)]">
+              <Search className="h-11 w-11 text-[#8C4F00]" strokeWidth={1.2} />
+              <p className="mt-4 text-[16px] font-black text-[#1a1a1a]">No Contract Found</p>
+              <p className="mt-1 text-[12px] text-[#6b6762]">You don't have any submitted work yet</p>
             </div>
           )}
         </div>
       )}
 
       {/* ── SUBMISSION DETAIL MODAL ── */}
+      </div>
+
       {selectedSubmission && (
         <div className="fixed inset-0 z-[95] flex items-end justify-center px-2 py-2 sm:items-center sm:px-4 sm:py-4">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setSelectedSubmissionId(null)} />

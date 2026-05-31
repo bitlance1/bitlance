@@ -4,7 +4,7 @@ import { getFirestore } from "firebase/firestore";
 import { getDatabase } from "firebase/database";
 import { getAnalytics, isSupported } from "firebase/analytics";
 
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyCr_rWHnm0w79J63dm69DEMkjawulE5Ovk",
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "bitlance-761eb.firebaseapp.com",
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "bitlance-761eb",

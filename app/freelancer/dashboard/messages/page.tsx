@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import FreelancerSidebar from "@/components/molecules/FreelancerSidebar";
 import MessagesList from "@/components/organisms/MessagesList";
 import ChatView from "@/components/organisms/ChatView";
+import { sendUserNotification } from "@/lib/notifications";
 import { firebaseAuth, firebaseDb } from "@/lib/firebase";
 import {
   addDoc,
@@ -433,6 +434,13 @@ export default function MessagesPage() {
       [`unread.${otherId}`]: increment(1),
       updatedAt: serverTimestamp(),
     });
+    void sendUserNotification({
+      userId: otherId,
+      title: `New message from ${selectedConversation.freelancerName || "Freelancer"}`,
+      body: messageText,
+      url: `/client/dashboard/messages?chat=${selectedConversation.id}`,
+      tag: `message-${selectedConversation.id}`,
+    }).catch(console.error);
   };
 
   const uploadChatFile = async (file: File) => {
@@ -584,6 +592,13 @@ export default function MessagesPage() {
         createdAt: serverTimestamp(),
       }),
     ]);
+    void sendUserNotification({
+      userId: selectedConversation.clientId,
+      title: "Work submitted for review",
+      body: notificationText,
+      url: `/client/dashboard/contracts?contract=${contractId}`,
+      tag: `work-submission-${contractId}`,
+    }).catch(console.error);
   };
 
   const handleVerifyPayment = async (
@@ -725,6 +740,13 @@ export default function MessagesPage() {
           { merge: true }
         ),
       ]);
+      void sendUserNotification({
+        userId: selectedConversation.freelancerId,
+        title: "Escrow funded",
+        body: fundedMessage,
+        url: `/freelancer/dashboard/messages?chat=${selectedConversation.id}`,
+        tag: `funded-${selectedConversation.id}`,
+      }).catch(console.error);
 
       return "funded";
     }

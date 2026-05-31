@@ -8,7 +8,7 @@ import { doc, getDoc, serverTimestamp, setDoc, updateDoc } from "firebase/firest
 type AuthGuardProps = {
   children: React.ReactNode;
   redirectTo?: string;
-  allowedRole?: "client" | "freelancer";
+  allowedRole?: "client" | "freelancer" | "admin";
 };
 
 export default function AuthGuard({
@@ -56,7 +56,8 @@ export default function AuthGuard({
 
         try {
           const userSnap = await getDoc(doc(firebaseDb, "all_users", user.uid));
-          const role = userSnap.exists() ? (userSnap.data() as any).role : "";
+          const userData = userSnap.exists() ? (userSnap.data() as { role?: string }) : {};
+          const role = userData.role ?? "";
           if (role === allowedRole) {
             setAllowed(true);
             setChecking(false);
@@ -66,7 +67,9 @@ export default function AuthGuard({
 
           setAllowed(false);
           setChecking(false);
-          if (role === "client") {
+          if (role === "admin") {
+            router.replace("/admin/dashboard");
+          } else if (role === "client") {
             router.replace("/client/dashboard");
           } else if (role === "freelancer") {
             router.replace("/freelancer/dashboard");
