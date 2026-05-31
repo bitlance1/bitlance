@@ -8,20 +8,88 @@ import {
   Briefcase, 
   Trophy, 
   ArrowUpRight, 
-  CheckCircle2,
   Rocket,
   Plus,
   Clock,
-  ShieldCheck
 } from 'lucide-react';
 import { firebaseAuth, firebaseDb } from '@/lib/firebase';
 import { collection, doc, getDoc, onSnapshot, query, where } from 'firebase/firestore';
+
+type MilestoneData = {
+  freelancerAmountSats?: number;
+  totalClientPaysSats?: number;
+  fundedSats?: number;
+  releasedSats?: number;
+  status?: string;
+};
+
+type FreelancerEarningSource = {
+  freelancerId?: string;
+  milestones?: MilestoneData[];
+  totalReleasedToFreelancerSats?: number;
+  escrowReleasedSats?: number;
+  paymentPaidAmountSats?: number;
+  totalFundedSats?: number;
+  escrowFundedTotalSats?: number;
+  status?: string;
+};
+
+type UserProfile = {
+  fullName?: string;
+};
+
+type ProposalSource = {
+  createdAt?: { seconds?: number };
+  jobTitle?: string;
+  clientName?: string;
+  rate?: string;
+  status?: string;
+};
+
+type StatCardProps = {
+  title: string;
+  value: string;
+  sub: string;
+  icon: React.ReactElement<{ size?: number }>;
+  variant: 'orange' | 'white' | 'dark';
+};
+
+const formatSats = (value: number) => `${Math.max(0, value || 0).toLocaleString()} sats`;
+
+const getMilestoneSummary = (job: FreelancerEarningSource) => {
+  const milestones = Array.isArray(job.milestones) ? job.milestones : [];
+  return milestones.reduce(
+    (summary, milestone) => {
+      const freelancerAmount = Number(milestone.freelancerAmountSats ?? 0);
+      const releasedAmount = Number(milestone.releasedSats ?? freelancerAmount);
+      return {
+        hasMilestones: true,
+        released: summary.released + (milestone.status === 'released' ? releasedAmount : 0),
+        funded: summary.funded + ((milestone.status === 'funded' || milestone.status === 'released') ? freelancerAmount : 0),
+      };
+    },
+    { hasMilestones: milestones.length > 0, released: 0, funded: 0 }
+  );
+};
+
+const getReleasedAmount = (job: FreelancerEarningSource) => {
+  const summary = getMilestoneSummary(job);
+  if (summary.hasMilestones) return summary.released;
+  return Number(job.totalReleasedToFreelancerSats ?? job.escrowReleasedSats ?? job.paymentPaidAmountSats ?? summary.released ?? 0);
+};
+
+const getFundedAmount = (job: FreelancerEarningSource) => {
+  const summary = getMilestoneSummary(job);
+  if (summary.hasMilestones) return summary.funded;
+  return Number(job.paymentPaidAmountSats ?? job.totalFundedSats ?? job.escrowFundedTotalSats ?? summary.funded ?? 0);
+};
 
 export default function OverviewContent() {
   const [displayName, setDisplayName] = useState('Freelancer');
   const [recentApplications, setRecentApplications] = useState<
     Array<{ id: string; project: string; client: string; amount: string; status: string; date: string }>
   >([]);
+  const [earningsStats, setEarningsStats] = useState({ earned: 0, escrow: 0, available: 0 });
 
   useEffect(() => {
     const unsubscribeAuth = firebaseAuth.onAuthStateChanged((user) => {
@@ -29,7 +97,7 @@ export default function OverviewContent() {
       const loadProfile = async () => {
         try {
           const snap = await getDoc(doc(firebaseDb, 'all_users', user.uid));
-          const data = snap.exists() ? (snap.data() as any) : null;
+          const data = snap.exists() ? (snap.data() as UserProfile) : null;
           setDisplayName(data?.fullName ?? user.displayName ?? 'Freelancer');
         } catch {
           setDisplayName(user.displayName ?? 'Freelancer');
@@ -40,12 +108,12 @@ export default function OverviewContent() {
         collection(firebaseDb, 'proposals'),
         where('freelancerId', '==', user.uid)
       );
-      const unsubscribe = onSnapshot(proposalsQuery, (snapshot) => {
+      const unsubscribeProposals = onSnapshot(proposalsQuery, (snapshot) => {
         const items = snapshot.docs.map((docSnap) => {
-          const data = docSnap.data() as any;
+          const data = docSnap.data() as ProposalSource;
           const createdAt = data.createdAt?.seconds ? data.createdAt.seconds * 1000 : 0;
           const date = createdAt ? `${Math.max(1, Math.round((Date.now() - createdAt) / 3600000))}h ago` : 'Recently';
-          const statusMap: any = {
+          const statusMap: Record<string, string> = {
             accepted: 'Approved',
             submitted: 'Pending',
             rejected: 'Rejected',
@@ -55,13 +123,38 @@ export default function OverviewContent() {
             project: data.jobTitle ?? 'Job Proposal',
             client: data.clientName ?? 'Client',
             amount: data.rate ?? '—',
-            status: statusMap[data.status] ?? 'Pending',
+            status: data.status ? statusMap[data.status] ?? 'Pending' : 'Pending',
             date,
           };
         });
         setRecentApplications(items.slice(0, 5));
       });
-      return () => unsubscribe();
+
+      const unsubscribeEarnings = onSnapshot(collection(firebaseDb, 'conversations'), (snapshot) => {
+        const jobs = snapshot.docs
+          .map((docSnap) => docSnap.data() as FreelancerEarningSource)
+          .filter((conv) => conv.freelancerId === user.uid);
+
+        let totalEarned = 0;
+        let totalEscrow = 0;
+        let totalAvailable = 0;
+
+        jobs.forEach((job) => {
+          const released = getReleasedAmount(job);
+          const funded = getFundedAmount(job);
+          const remaining = Math.max(0, funded - released);
+          totalEarned += released + remaining;
+          totalEscrow += remaining;
+          totalAvailable += released;
+        });
+
+        setEarningsStats({ earned: totalEarned, escrow: totalEscrow, available: totalAvailable });
+      });
+
+      return () => {
+        unsubscribeProposals();
+        unsubscribeEarnings();
+      };
     });
     return () => unsubscribeAuth();
   }, []);
@@ -106,8 +199,8 @@ export default function OverviewContent() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
           <StatCard 
             title="Total Earnings" 
-            value="0 sats" 
-            sub="Tracking soon" 
+            value={formatSats(earningsStats.earned)} 
+            sub={`${formatSats(earningsStats.available)} received`} 
             icon={<CircleDollarSign className="w-6 h-6" />}
             variant="orange"
           />
@@ -178,7 +271,7 @@ export default function OverviewContent() {
 
 // --- SUB-COMPONENTS ---
 
-function StatCard({ title, value, sub, icon, variant }: any) {
+function StatCard({ title, value, sub, icon, variant }: StatCardProps) {
   const isDark = variant === 'dark';
   return (
     <div className={`p-6 rounded-[28px] border transition-all hover:translate-y-[-2px] ${
@@ -199,7 +292,7 @@ function StatCard({ title, value, sub, icon, variant }: any) {
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const styles: any = {
+  const styles: Record<string, string> = {
     Approved: "bg-green-50 text-green-600 border-green-100",
     Pending: "bg-orange-50 text-orange-600 border-orange-100",
     Rejected: "bg-gray-50 text-gray-500 border-gray-100",

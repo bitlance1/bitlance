@@ -76,28 +76,31 @@ const getMilestoneSummary = (job: ConversationData) => {
   return milestones.reduce(
     (summary, milestone) => {
       const freelancerAmount = milestone.freelancerAmountSats ?? 0;
-      const fundedAmount = milestone.fundedSats ?? milestone.totalClientPaysSats ?? 0;
+      const releasedAmount = milestone.releasedSats ?? freelancerAmount;
       const clientAmount = milestone.totalClientPaysSats ?? 0;
       const feeAmount = milestone.platformFeeSats ?? 0;
       return {
-        released: summary.released + (milestone.status === 'released' ? freelancerAmount : 0),
-        funded: summary.funded + ((milestone.status === 'funded' || milestone.status === 'released') ? fundedAmount : 0),
+        hasMilestones: true,
+        released: summary.released + (milestone.status === 'released' ? releasedAmount : 0),
+        funded: summary.funded + ((milestone.status === 'funded' || milestone.status === 'released') ? freelancerAmount : 0),
         clientPayable: summary.clientPayable + clientAmount,
         fees: summary.fees + feeAmount,
       };
     },
-    { released: 0, funded: 0, clientPayable: 0, fees: 0 }
+    { hasMilestones: milestones.length > 0, released: 0, funded: 0, clientPayable: 0, fees: 0 }
   );
 };
 
 const getReleasedAmount = (job: ConversationData) => {
   const summary = getMilestoneSummary(job);
+  if (summary.hasMilestones) return summary.released;
   return job.totalReleasedToFreelancerSats ?? job.escrowReleasedSats ?? job.paymentPaidAmountSats ?? summary.released;
 };
 
 const getFundedAmount = (job: ConversationData) => {
   const summary = getMilestoneSummary(job);
-  return job.totalFundedSats ?? job.escrowFundedTotalSats ?? summary.funded;
+  if (summary.hasMilestones) return summary.funded;
+  return job.paymentPaidAmountSats ?? job.totalFundedSats ?? job.escrowFundedTotalSats ?? summary.funded;
 };
 
 const getContractValue = (job: ConversationData) => {
@@ -139,7 +142,7 @@ export default function EarningsPage() {
           const remaining = Math.max(0, funded - released);
           totalEarned += released + remaining;
           totalEscrow += remaining;
-          if (['released', 'completed', 'approved'].includes(job.status || '')) totalAvailable += released;
+          totalAvailable += released;
         });
 
         setConversations(jobs.sort((a, b) => {
