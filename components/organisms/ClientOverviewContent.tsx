@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Button from "@/components/atoms/Button";
 import DashboardMetricCard from "@/components/molecules/DashboardMetricCard";
-import ClientJobPostCard from "@/components/molecules/ClientJobPostCard";
 import ClientContractCard from "@/components/molecules/ClientContractCard";
 import ClientProposalCard from "@/components/molecules/ClientProposalCard";
 import { firebaseAuth, firebaseDb } from "@/lib/firebase";
@@ -608,18 +607,92 @@ export default function ClientOverviewContent() {
                 {jobsError}
               </div>
             ) : latestJobs.length ? (
-              latestJobs.map((job) => (
-                <ClientJobPostCard
-                  key={job.id}
-                  {...job}
-                  companyLogoUrl={job.companyLogo}
-                  showDetailsHint={false}
-                  onSelect={() => {
-                    setSelectedJobId(job.id);
-                    setJobModalOpen(true);
-                  }}
-                />
-              ))
+              latestJobs.map((job) => {
+                const budgetNumeric = job.budget?.replace(/[^0-9,]/g, "").trim() || "0";
+                const statusStyles: Record<string, string> = {
+                  Open: "bg-[#E8F5E9] text-[#2E7D32]",
+                  Paused: "bg-[#FDECEA] text-[#C62828]",
+                  "In Review": "bg-[#E8F0FE] text-[#1565C0]",
+                };
+                const cleanDesc = job.description?.trim()
+                  ? job.description.replace(/[\r\n]+/g, " ").replace(/\s{2,}/g, " ").trim()
+                  : null;
+                return (
+                  <div
+                    key={job.id}
+                    onClick={() => { setSelectedJobId(job.id); setJobModalOpen(true); }}
+                    className="cursor-pointer rounded-[12px] border border-[#EAE7E2] bg-white p-4 hover:border-[#F7931A]/40 hover:shadow-sm transition-all"
+                  >
+                    <div className="flex items-start gap-3">
+                      {/* Logo */}
+                      <div className="flex-shrink-0 h-10 w-10 rounded-[8px] overflow-hidden bg-[#F7931A] flex items-center justify-center">
+                        {job.companyLogo ? (
+                          <img src={job.companyLogo} alt="logo" className="h-full w-full object-cover" />
+                        ) : (
+                          <span className="text-[15px] font-black text-white">B</span>
+                        )}
+                      </div>
+
+                      {/* Title + desc */}
+                      <div className="min-w-0 flex-1 overflow-hidden">
+                        <div
+                          className="text-[13px] font-bold text-[#1a1a1a] leading-[1.3]"
+                          style={{ display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden" }}
+                        >
+                          {job.title}
+                        </div>
+                        {cleanDesc && (
+                          <div
+                            className="mt-0.5 text-[11px] text-[#6b6762] leading-[1.5]"
+                            style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", wordBreak: "break-word" }}
+                          >
+                            {cleanDesc}
+                          </div>
+                        )}
+                        {/* Tags */}
+                        {job.tags?.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {job.tags.slice(0, 3).map((tag: string) => (
+                              <span key={tag} className="rounded-full bg-[#F3F0EC] px-2 py-0.5 text-[10px] font-medium text-[#555]">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {/* Proposals count */}
+                        <div className="mt-2 flex items-center gap-1 text-[11px] text-[#9e9690]">
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
+                          </svg>
+                          <span>{job.proposals ?? 0} Proposals</span>
+                        </div>
+                      </div>
+
+                      {/* Right: status + budget */}
+                      <div className="flex flex-shrink-0 flex-col items-end gap-1">
+                        <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.08em] ${statusStyles[job.status as string] ?? "bg-[#F3F0EC] text-[#555]"}`}>
+                          {job.status}
+                        </span>
+                        <div className="flex items-center gap-0.5 mt-1">
+                          <svg width="10" height="12" viewBox="0 0 12 18" fill="#F7931A">
+                            <path d="M7 0L0 10h5l-1 8 8-11H7V0z" />
+                          </svg>
+                          <span className="text-[16px] font-black text-[#1a1a1a] tabular-nums leading-none">{budgetNumeric}</span>
+                        </div>
+                        <span className="text-[9px] font-semibold uppercase text-[#9e9690]">sats</span>
+                        {job.duration && (
+                          <div className="flex items-center gap-0.5 text-[9px] text-[#9e9690]">
+                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+                            </svg>
+                            <span>{job.duration}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
             ) : (
               <div className="rounded-[12px] border border-[#EAE7E2] bg-[#FAF8F5] p-4 text-[12px] text-[#6b6762]">
                 No job posts yet.
