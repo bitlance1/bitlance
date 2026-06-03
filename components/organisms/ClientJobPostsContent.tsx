@@ -11,6 +11,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   onSnapshot,
@@ -106,10 +107,27 @@ export default function ClientJobPostsContent() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editJobId, setEditJobId] = useState<string | null>(null);
   const [showToast, setShowToast] = useState<{ show: boolean; message: string }>({ show: false, message: "" });
+  const [deleteJobId, setDeleteJobId] = useState<string | null>(null);
+  const [isDeletingJob, setIsDeletingJob] = useState(false);
 
   const triggerToast = (message: string) => {
     setShowToast({ show: true, message });
     setTimeout(() => setShowToast({ show: false, message: "" }), 3000);
+  };
+
+  const handleDeleteJob = async () => {
+    if (!deleteJobId) return;
+    setIsDeletingJob(true);
+    try {
+      await deleteDoc(doc(firebaseDb, "jobs", deleteJobId));
+      if (selectedJobId === deleteJobId) setSelectedJobId("");
+      setDeleteJobId(null);
+      triggerToast("Job post deleted.");
+    } catch {
+      triggerToast("Failed to delete job post. Please try again.");
+    } finally {
+      setIsDeletingJob(false);
+    }
   };
 
   const uploadCompanyLogo = async (file: File) => {
@@ -538,6 +556,7 @@ export default function ClientJobPostsContent() {
                   setEditJobId(job.id);
                   setIsEditModalOpen(true);
                 }}
+                onDelete={() => setDeleteJobId(job.id)}
               />
             ))
           ) : (
@@ -1340,6 +1359,52 @@ export default function ClientJobPostsContent() {
               </svg>
             </div>
             <span className="text-[13px] font-medium text-white">{showToast.message}</span>
+          </div>
+        </div>
+      )}
+
+      {/* ── DELETE CONFIRM MODAL ── */}
+      {deleteJobId && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center px-4">
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={() => !isDeletingJob && setDeleteJobId(null)}
+          />
+          <div className="relative z-[91] w-full max-w-sm rounded-[20px] border border-[#EAE7E2] bg-white p-6 shadow-[0_20px_50px_rgba(0,0,0,0.2)]">
+            {/* Icon */}
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#FEF2F2]">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                <path d="M10 11v6" />
+                <path d="M14 11v6" />
+                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+              </svg>
+            </div>
+            <div className="mt-4 text-center">
+              <div className="text-[16px] font-black text-[#1a1a1a]">Delete job post?</div>
+              <p className="mt-2 text-[12px] leading-[1.6] text-[#6b6762]">
+                This will permanently remove the job post and all associated data. This action cannot be undone.
+              </p>
+            </div>
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setDeleteJobId(null)}
+                disabled={isDeletingJob}
+                className="flex-1 rounded-full border border-[#EAE7E2] px-4 py-2.5 text-[13px] font-semibold text-[#6b6762] transition-colors hover:bg-[#F7F4F0] disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteJob}
+                disabled={isDeletingJob}
+                className="flex-1 rounded-full bg-[#DC2626] px-4 py-2.5 text-[13px] font-bold text-white transition-colors hover:bg-[#B91C1C] disabled:opacity-60"
+              >
+                {isDeletingJob ? "Deleting…" : "Delete"}
+              </button>
+            </div>
           </div>
         </div>
       )}

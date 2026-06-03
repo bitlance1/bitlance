@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import OneSignalInit from "@/components/organisms/OneSignalInit";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -29,7 +28,6 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet" />
       </head>
       <body className="min-h-full flex flex-col font-inter">
-        <OneSignalInit />
         {children}
       </body>
     </html>

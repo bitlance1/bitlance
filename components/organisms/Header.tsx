@@ -101,7 +101,7 @@ const NAV_ITEMS = [
   { label: 'Home', href: '/' },
   { label: 'Find Work', href: '/findwork' },
   { label: 'Find Freelancers', href: '/find-freelancers' },
-  { label: 'About', href: '/about' },
+  // { label: 'About', href: '/about' },
 ];
 
 export default function Header() {
