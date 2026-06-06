@@ -145,6 +145,34 @@ const normalizePaymentStatus = (data: Record<string, unknown>): Conversation["pa
   return status as Conversation["paymentStatus"];
 };
 
+const normalizeFundedAmount = (data: Record<string, unknown>) => {
+  const status = normalizePaymentStatus(data);
+  if (status !== "funded" && status !== "released") return 0;
+  return Math.max(0, numberField(data.escrowFundedTotalSats ?? data.paymentPaidAmountSats));
+};
+
+const normalizeReleasedAmount = (data: Record<string, unknown>) => {
+  const status = normalizePaymentStatus(data);
+  if (status !== "funded" && status !== "released") return 0;
+  return Math.max(0, numberField(data.escrowReleasedSats));
+};
+
+const normalizeMilestones = (milestones: unknown, funded: boolean) => {
+  if (!Array.isArray(milestones)) return [];
+  return milestones.map((milestone) => {
+    const item = milestone as Record<string, unknown>;
+    return {
+      ...item,
+      fundedSats: funded ? numberField(item.fundedSats) : 0,
+      releasedSats: funded ? numberField(item.releasedSats) : 0,
+      status:
+        funded || item.status === "released"
+          ? item.status
+          : "pending",
+    };
+  });
+};
+
 const formatTimestamp = (value?: any) => {
   const seconds = value?.seconds;
   if (!seconds) return "";
@@ -269,6 +297,9 @@ export default function ClientMessagesPage() {
               }
             }
 
+            const normalizedPaymentStatus = normalizePaymentStatus(data);
+            const isFundedRecord = normalizedPaymentStatus === "funded" || normalizedPaymentStatus === "released";
+
             return {
               id: docSnap.id,
               jobId: data.jobId ?? "",
@@ -284,19 +315,19 @@ export default function ClientMessagesPage() {
               lastMessage: data.lastMessage ?? {},
               unread: data.unread ?? {},
               // otherOnline removed — derived live from presenceMap in messageList
-              paymentStatus: normalizePaymentStatus(data),
+              paymentStatus: normalizedPaymentStatus,
               paymentAmountSats: Number(data.paymentAmountSats ?? 0),
               paymentTotalAmountSats: Number(data.paymentTotalAmountSats ?? 0),
               paymentInstallments: Number(data.paymentInstallments ?? 0),
               paymentCurrentInstallment: Number(data.paymentCurrentInstallment ?? 0),
-              paymentPaidAmountSats: Number(data.paymentPaidAmountSats ?? 0),
+              paymentPaidAmountSats: isFundedRecord ? Number(data.paymentPaidAmountSats ?? 0) : 0,
               paymentTotalChargedSats: Number(data.paymentTotalChargedSats ?? 0),
               platformFeePercent: Number(data.platformFeePercent ?? PLATFORM_FEE_PERCENT),
               platformFeeSats: Number(data.platformFeeSats ?? 0),
               paymentMode: data.paymentMode ?? "full",
-              milestones: Array.isArray(data.milestones) ? data.milestones : [],
-              escrowFundedTotalSats: Number(data.escrowFundedTotalSats ?? 0),
-              escrowReleasedSats: Number(data.escrowReleasedSats ?? 0),
+              milestones: normalizeMilestones(data.milestones, isFundedRecord) as EscrowMilestone[],
+              escrowFundedTotalSats: normalizeFundedAmount(data),
+              escrowReleasedSats: normalizeReleasedAmount(data),
               invoiceMilestoneIndex: Number(data.invoiceMilestoneIndex ?? 0),
               paymentRequest: data.paymentRequest ?? "",
               paymentHash: data.paymentHash ?? "",
@@ -523,6 +554,8 @@ export default function ClientMessagesPage() {
 
     const contractSnap = await getDoc(doc(firebaseDb, "contracts", contractId));
     const contractData = contractSnap.exists() ? (contractSnap.data() as any) : {};
+    const escrowSnap = await getDoc(doc(firebaseDb, "escrows", contractId));
+    const escrowData = escrowSnap.exists() ? (escrowSnap.data() as Record<string, unknown>) : {};
     if (!contractSnap.exists() || contractData.status !== "Active") {
       throw new Error("Accept this freelancer's proposal before funding escrow.");
     }
@@ -534,7 +567,11 @@ export default function ClientMessagesPage() {
       throw new Error("This escrow is not linked to the accepted job contract.");
     }
 
-    const fundedAmount = selectedConversation.escrowFundedTotalSats || Number(contractData.escrowFundedTotalSats ?? 0) || 0;
+    const existingFundingData = escrowSnap.exists()
+      ? { ...contractData, ...selectedConversation, ...escrowData }
+      : {};
+    const fundedAmount = normalizeFundedAmount(existingFundingData);
+    const releasedAmount = normalizeReleasedAmount(existingFundingData);
     const totalAmount =
       selectedConversation.paymentTotalAmountSats ||
       Number(contractData.paymentTotalAmountSats ?? 0) ||
@@ -545,11 +582,13 @@ export default function ClientMessagesPage() {
     const paymentInstallments = selectedConversation.paymentInstallments || Number(contractData.paymentInstallments ?? 0) || clampInstallments(installments);
     const platformFeeSats = Math.ceil(totalAmount * (PLATFORM_FEE_PERCENT / 100));
     const totalClientPayable = totalAmount + platformFeeSats;
-    const existingMilestones = Array.isArray(selectedConversation.milestones) && selectedConversation.milestones.length
-      ? selectedConversation.milestones
+    const existingMilestones = escrowSnap.exists() && Array.isArray(escrowData.milestones) && escrowData.milestones.length
+      ? escrowData.milestones
       : Array.isArray(contractData.milestones) && contractData.milestones.length
-        ? contractData.milestones
-        : buildMilestones(totalAmount, totalClientPayable, paymentInstallments, milestoneTitles);
+        ? normalizeMilestones(contractData.milestones, false)
+        : Array.isArray(selectedConversation.milestones) && selectedConversation.milestones.length
+          ? normalizeMilestones(selectedConversation.milestones, false)
+          : buildMilestones(totalAmount, totalClientPayable, paymentInstallments, milestoneTitles);
     const milestones = existingMilestones.map((milestone: any, index: number) => ({
       index: Number(milestone.index ?? index + 1),
       title: milestone.title || milestoneTitles[index] || `Milestone ${index + 1}`,
@@ -622,7 +661,7 @@ export default function ClientMessagesPage() {
       paymentCreatedAt: serverTimestamp(),
       milestones,
       escrowFundedTotalSats: fundedAmount,
-      escrowReleasedSats: Number(contractData.escrowReleasedSats ?? selectedConversation.escrowReleasedSats ?? 0),
+      escrowReleasedSats: releasedAmount,
       updatedAt: serverTimestamp(),
     };
     const escrowId = contractId;
@@ -667,7 +706,7 @@ export default function ClientMessagesPage() {
           milestoneCount: paymentInstallments,
           milestones,
           totalFundedSats: fundedAmount,
-          totalReleasedToFreelancerSats: Number(contractData.escrowReleasedSats ?? selectedConversation.escrowReleasedSats ?? 0),
+          totalReleasedToFreelancerSats: releasedAmount,
           status: fundedAmount > 0 ? "partially_funded" : "invoice_created",
           updatedAt: serverTimestamp(),
           createdAt: serverTimestamp(),
