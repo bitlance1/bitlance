@@ -554,6 +554,10 @@ export default function ClientMessagesPage() {
 
     const contractSnap = await getDoc(doc(firebaseDb, "contracts", contractId));
     const contractData = contractSnap.exists() ? (contractSnap.data() as any) : {};
+    const conversationSnap = await getDoc(doc(firebaseDb, "conversations", selectedConversation.id));
+    const liveConversationData = conversationSnap.exists()
+      ? (conversationSnap.data() as Record<string, unknown>)
+      : {};
     const escrowSnap = await getDoc(doc(firebaseDb, "escrows", contractId));
     const escrowData = escrowSnap.exists() ? (escrowSnap.data() as Record<string, unknown>) : {};
     if (!contractSnap.exists() || contractData.status !== "Active") {
@@ -567,8 +571,22 @@ export default function ClientMessagesPage() {
       throw new Error("This escrow is not linked to the accepted job contract.");
     }
 
+    const livePaymentStatus = normalizePaymentStatus({
+      ...contractData,
+      ...selectedConversation,
+      ...liveConversationData,
+    });
+    const livePaymentRequest =
+      typeof liveConversationData.paymentRequest === "string"
+        ? liveConversationData.paymentRequest
+        : selectedConversation.paymentRequest;
+
+    if (livePaymentStatus === "invoice_created" && livePaymentRequest) {
+      throw new Error("An escrow invoice is already active. Check or pay the current invoice before creating another one.");
+    }
+
     const existingFundingData = escrowSnap.exists()
-      ? { ...contractData, ...selectedConversation, ...escrowData }
+      ? { ...contractData, ...selectedConversation, ...liveConversationData, ...escrowData }
       : {};
     const fundedAmount = normalizeFundedAmount(existingFundingData);
     const releasedAmount = normalizeReleasedAmount(existingFundingData);
@@ -582,6 +600,9 @@ export default function ClientMessagesPage() {
     const paymentInstallments = selectedConversation.paymentInstallments || Number(contractData.paymentInstallments ?? 0) || clampInstallments(installments);
     const platformFeeSats = Math.ceil(totalAmount * (PLATFORM_FEE_PERCENT / 100));
     const totalClientPayable = totalAmount + platformFeeSats;
+    if (fundedAmount >= totalClientPayable && totalClientPayable > 0) {
+      throw new Error("Escrow is already fully funded. No new invoice can be created for this contract.");
+    }
     const existingMilestones = escrowSnap.exists() && Array.isArray(escrowData.milestones) && escrowData.milestones.length
       ? escrowData.milestones
       : Array.isArray(contractData.milestones) && contractData.milestones.length
@@ -602,6 +623,17 @@ export default function ClientMessagesPage() {
     const nextMilestone =
       milestones.find((milestone) => milestone.status !== "funded" && milestone.status !== "released") ??
       milestones[milestones.length - 1];
+    const hasOpenFundedMilestone = milestones.some(
+      (milestone) =>
+        Number(milestone.fundedSats ?? 0) > Number(milestone.releasedSats ?? 0) &&
+        (milestone.status === "funded" || milestone.status === "submitted" || milestone.status === "approved")
+    );
+    if (hasOpenFundedMilestone) {
+      throw new Error("A funded milestone is still open. Release or complete it before creating another invoice.");
+    }
+    if (milestones.every((milestone) => milestone.status === "funded" || milestone.status === "released")) {
+      throw new Error("Escrow is already fully funded. No new invoice can be created for this contract.");
+    }
     const currentInstallment = fundingMode === "full" ? 1 : nextMilestone.index;
     const amount = fundingMode === "full"
       ? Math.max(0, totalClientPayable - fundedAmount)

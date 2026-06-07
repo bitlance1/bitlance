@@ -152,8 +152,7 @@ export default function ChatView({
   );
   const showCurrentInvoice =
     paymentStatus === 'invoice_created' &&
-    !!paymentRequest &&
-    activePaymentRequest === paymentRequest;
+    !!paymentRequest;
   const canChoosePlan =
     viewerRole === 'client' &&
     !hasPaidMilestone &&
@@ -221,6 +220,10 @@ export default function ChatView({
 
   useEffect(() => {
     setVerificationComplete(paymentStatus === 'funded' || paymentStatus === 'released');
+    if (paymentStatus === 'invoice_created' && paymentRequest) {
+      setActivePaymentRequest(paymentRequest);
+      return;
+    }
     if (paymentStatus !== 'invoice_created') {
       setActivePaymentRequest('');
     }
@@ -600,11 +603,11 @@ export default function ChatView({
               {viewerRole === 'client' && showCurrentInvoice ? (
                 <div className="grid gap-3 sm:grid-cols-[140px_1fr] sm:items-center">
                   <div className="flex h-[140px] w-[140px] items-center justify-center rounded-[10px] border border-[#EAE7E2] bg-white">
-                    <QRCodeSVG value={`lightning:${activePaymentRequest}`} size={120} />
+                    <QRCodeSVG value={`lightning:${activePaymentRequest || paymentRequest}`} size={120} />
                   </div>
                   <div className="rounded-[10px] bg-white p-2">
                     <p className="break-all px-1 py-1 text-[11px] leading-5 text-[#6b6762]">
-                      {activePaymentRequest}
+                      {activePaymentRequest || paymentRequest}
                     </p>
                     <Button
                       size="sm"
