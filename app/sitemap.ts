@@ -3,7 +3,7 @@ import { firebaseDb } from "@/lib/firebase";
 import { collection, getDocs, query, where } from "firebase/firestore";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://bitlance.work";
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.bitlance.work";
 
   // Static routes
   const routes = [
