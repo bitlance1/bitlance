@@ -55,19 +55,29 @@ export default function AuthGuard({
         }
 
         try {
-          const userSnap = await getDoc(doc(firebaseDb, "all_users", user.uid));
+          // Parallelize the queries to Firestore based on the allowedRole to save a network roundtrip
+          const roleCollection = allowedRole === "freelancer" ? "freelancers" : allowedRole === "client" ? "clients" : null;
+          
+          let userSnap, roleSnap;
+          if (roleCollection) {
+            const [uSnap, rSnap] = await Promise.all([
+              getDoc(doc(firebaseDb, "all_users", user.uid)),
+              getDoc(doc(firebaseDb, roleCollection, user.uid))
+            ]);
+            userSnap = uSnap;
+            roleSnap = rSnap;
+          } else {
+            userSnap = await getDoc(doc(firebaseDb, "all_users", user.uid));
+          }
+
           const userData = userSnap.exists() ? (userSnap.data() as { role?: string }) : {};
           const role = userData.role ?? "";
+          
           if (role === allowedRole) {
-            // Only redirect to onboarding if the account is brand new (no profile data yet).
-            // Existing users who predate the onboarding feature are let through directly.
-            const roleCollection = role === "freelancer" ? "freelancers" : role === "client" ? "clients" : null;
-            if (roleCollection) {
-              const roleSnap = await getDoc(doc(firebaseDb, roleCollection, user.uid));
+            if (roleCollection && roleSnap) {
               const roleData = roleSnap.exists() ? (roleSnap.data() as Record<string, any>) : {};
 
               // Determine if this is a genuinely new account with no profile filled in yet.
-              // We check for any meaningful profile field — if any exist, the user is not new.
               const hasProfileData =
                 roleData.onboardingComplete === true ||
                 !!roleData.title ||
@@ -78,7 +88,6 @@ export default function AuthGuard({
                 (Array.isArray(roleData.skills) && roleData.skills.length > 0);
 
               if (!hasProfileData) {
-                // Brand new account — send to onboarding
                 setAllowed(false);
                 setChecking(false);
                 router.replace(`/${role}/onboarding`);
@@ -168,8 +177,25 @@ export default function AuthGuard({
 
   if (checking) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#FCF9F7] text-[#6b6762] text-sm">
-        Checking session...
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#FCF9F7]">
+        {/* Modern Premium Glassmorphic Loading Card */}
+        <div className="relative flex flex-col items-center p-8    max-w-sm w-full mx-4 transition-all duration-300">
+          {/* Outer glowing pulsing aura */}
+          <div className="absolute inset-0 -z-10  filter blur-xl animate-pulse" />
+          
+          {/* Custom Modern Gradient Spinner */}
+          <div className="relative w-[30px] h-[30px] mb-5">
+            {/* Background track */}
+            <div className="absolute inset-0 rounded-full border-4 border-[#FF7A50]/10" />
+            {/* Spinning active ring */}
+            <div className="absolute inset-0 rounded-full border-4 border-t-[#FF7A50] border-r-transparent border-b-transparent border-l-transparent animate-spin duration-700" />
+            {/* Inner pulsing core */}
+            <div className="absolute inset-2.5 rounded-full bg-gradient-to-tr from-[#FF7A50] to-[#FF9E7D] opacity-10 animate-ping" />
+          </div>
+
+          {/* <h3 className="text-[#3d3a37] font-semibold text-base mb-1 tracking-tight">Securing Session</h3>
+          <p className="text-[#8c857f] text-xs text-center animate-pulse">Initializing direct connection...</p> */}
+        </div>
       </div>
     );
   }

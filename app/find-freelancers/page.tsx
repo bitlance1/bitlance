@@ -1,11 +1,66 @@
-'use client';
-
-import { useEffect, useMemo, useState } from 'react';
 import Header from '@/components/organisms/Header';
 import Footer from '@/components/organisms/Footer';
-import JobCard from '@/components/atoms/JobCard';
-import { collection, doc, getDoc, getDocs } from 'firebase/firestore';
+import React, { useState, useEffect, useMemo } from 'react';
+import { collection, query, where, getDocs, getDoc, doc } from 'firebase/firestore';
 import { firebaseDb } from '@/lib/firebase';
+
+export const metadata = {
+  title: 'Find Bitcoin Freelancers | Bitlance',
+  description: 'Discover skilled Bitcoin-native freelancers for your projects on Bitlance.',
+};
+
+async function getInitialFreelancers() {
+  try {
+    const freelancersSnap = await getDocs(collection(firebaseDb, 'freelancers'));
+    const items = await Promise.all(
+      freelancersSnap.docs.map(async (docSnap) => {
+        const freeData = docSnap.data() as any;
+        const uid = docSnap.id;
+        let allData: any = {};
+        try {
+          const allUsersSnap = await getDoc(doc(firebaseDb, 'all_users', uid));
+          allData = allUsersSnap.exists() ? (allUsersSnap.data() as any) : {};
+        } catch {
+          allData = {};
+        }
+        const skills = Array.isArray(freeData.skills) ? freeData.skills.filter(Boolean) : [];
+        const fullName =
+          freeData.fullName ??
+          allData.fullName ??
+          `${freeData.firstName ?? allData.firstName ?? ''} ${freeData.lastName ?? allData.lastName ?? ''}`.trim() ??
+          'Freelancer';
+        return {
+          id: uid,
+          icon: '', // icon handled in client component
+          title: freeData.title?.trim() || fullName || 'Freelancer',
+          fullName,
+          description: freeData.bio?.trim() || 'Professional freelancer available for Bitcoin-native work.',
+          price: `${freeData.hourlyRate ?? '0'} ${freeData.currency ?? 'SATS'}/hr`,
+          tags: skills.slice(0, 3),
+          skills,
+          profileHref: `/freelancer/public/${uid}`,
+          avatarUrl: freeData.avatarUrl ?? allData.avatarUrl ?? '',
+        };
+      })
+    );
+    return items;
+  } catch (error) {
+    console.error('Failed to load freelancers on server:', error);
+    return [];
+  }
+}
+
+export default async function FindFreelancersPage() {
+  const initialFreelancers = await getInitialFreelancers();
+  return (
+    <>
+      <Header />
+      <FindFreelancers initialFreelancers={initialFreelancers} />
+      <Footer />
+    </>
+  );
+}
+
 
 type FreelancerCardItem = {
   id: string;
@@ -85,11 +140,11 @@ const formatHourlyRate = (hourlyRate: string, currency: string) => {
   return `${cleanRate} ${cleanCurrency}/hr`;
 };
 
-export default function FindFreelancers() {
+export default function FindFreelancers({ initialFreelancers }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string[]>([]);
-  const [freelancers, setFreelancers] = useState<FreelancerCardItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [freelancers, setFreelancers] = useState<FreelancerCardItem[]>(initialFreelancers ?? []);
+  const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
   const toggleCategory = (category: string) => {

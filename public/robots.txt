@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+Allow: /help
+Allow: /findwork
+Allow: /find-freelancers
+Disallow: /client/
+Disallow: /freelancer/
+Disallow: /admin/
+Disallow: /api/
+Disallow: /login
+Disallow: /signup
+Sitemap: https://bitlance.work/sitemap.xml
