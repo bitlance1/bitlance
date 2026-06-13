@@ -115,9 +115,9 @@ const hasFundedEscrow = (data: Record<string, unknown>) => {
   const releasedTotal = Number(data.escrowReleasedSats ?? 0);
   const hasFundedMilestone = Array.isArray(data.milestones)
     ? data.milestones.some((milestone) => {
-        const item = milestone as Record<string, unknown>;
-        return numberField(item.fundedSats) > numberField(item.releasedSats);
-      })
+      const item = milestone as Record<string, unknown>;
+      return numberField(item.fundedSats) > numberField(item.releasedSats);
+    })
     : false;
   return fundedTotal > releasedTotal || hasFundedMilestone;
 };
@@ -148,7 +148,7 @@ const calculateInstallmentAmount = (total: number, installments: number, install
 
 // ── Avatar ───────────────────────────────────────────────────────────────────
 const AVATAR_COLORS = [
-  "bg-purple-600","bg-blue-600","bg-emerald-600","bg-orange-500","bg-rose-600","bg-indigo-600","bg-teal-600","bg-amber-600",
+  "bg-purple-600", "bg-blue-600", "bg-emerald-600", "bg-orange-500", "bg-rose-600", "bg-indigo-600", "bg-teal-600", "bg-amber-600",
 ];
 const getAvatarColor = (name: string) => AVATAR_COLORS[(name?.charCodeAt(0) ?? 0) % AVATAR_COLORS.length];
 const getInitials = (name: string) =>
@@ -347,6 +347,8 @@ export default function ClientContractsContent() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [pendingApprovalJobId, setPendingApprovalJobId] = useState<string | null>(null);
   const [approvalErrorMessage, setApprovalErrorMessage] = useState<string>("");
+  const [isApproving, setIsApproving] = useState(false);
+  const isApprovingRef = useRef(false);
   const [selectedSubmissionId, setSelectedSubmissionId] = useState<string | null>(null);
   const [isSubmissionModalOpen, setIsSubmissionModalOpen] = useState(false);
   const [pendingChangeJobId, setPendingChangeJobId] = useState<string | null>(null);
@@ -371,7 +373,7 @@ export default function ClientContractsContent() {
         const d = snap.data() as any;
         resolvedName = d.fullName ?? d.name ?? d.email ?? resolvedName;
       }
-    } catch {}
+    } catch { }
     if (!resolvedName) {
       try {
         const snap = await getDoc(doc(firebaseDb, "freelancers", freelancerId));
@@ -379,7 +381,7 @@ export default function ClientContractsContent() {
           const d = snap.data() as any;
           resolvedName = d.fullName || `${d.firstName ?? ""} ${d.lastName ?? ""}`.trim() || d.name || resolvedName;
         }
-      } catch {}
+      } catch { }
     }
     if (!resolvedName) {
       try {
@@ -389,7 +391,7 @@ export default function ClientContractsContent() {
           const d = snap.docs[0].data() as any;
           resolvedName = d.fullName || `${d.firstName ?? ""} ${d.lastName ?? ""}`.trim() || d.name || resolvedName;
         }
-      } catch {}
+      } catch { }
     }
     freelancerNameCache.current[freelancerId] = resolvedName || "Freelancer";
     return freelancerNameCache.current[freelancerId];
@@ -485,7 +487,7 @@ export default function ClientContractsContent() {
           items.sort((a, b) => b.submittedAt.getTime() - a.submittedAt.getTime());
           setSubmittedJobs(items);
         },
-        () => {}
+        () => { }
       );
     });
     return () => { unsubAuth(); unsubContracts?.(); unsubSubmitted?.(); };
@@ -571,36 +573,82 @@ export default function ClientContractsContent() {
   };
 
   const confirmApproveWithPayment = async () => {
-    if (!pendingApprovalJobId) return;
-    const job = submittedJobs.find((j) => j.id === pendingApprovalJobId);
-    const contract = job ? contracts.find((c) => c.id === job.contractId) : null;
-    if (!job || !contract) { setApprovalErrorMessage("Unable to find the contract for this submission."); return; }
-    const paymentStatus = contract.paymentStatus ?? "unfunded";
-    const fundedInstallments = contract.paymentCurrentInstallment ?? 0;
-    const totalInstallments = contract.paymentInstallments ?? 1;
-    const releasedInstallments = contract.paymentReleasedInstallments ?? 0;
-    const nextMilestoneIndex = releasedInstallments + 1;
-    const milestone = contract.milestones?.find((item: any, index) => Number(item.index ?? index + 1) === nextMilestoneIndex);
-    const totalAmount = contract.paymentTotalAmountSats || parseSats(contract.budget) || 0;
-    const milestoneAmount = Number((milestone as any)?.freelancerAmountSats ?? calculateInstallmentAmount(totalAmount, totalInstallments, nextMilestoneIndex));
-    const milestoneFundedSats = milestone ? Number((milestone as any).fundedSats ?? 0) : milestoneAmount;
-    const milestoneReleasedSats = milestone ? Number((milestone as any).releasedSats ?? 0) : 0;
-    const remainingMilestoneEscrow = Math.max(0, milestoneFundedSats - milestoneReleasedSats);
-    const canRelease = fundedInstallments >= nextMilestoneIndex && (paymentStatus === "funded" || paymentStatus === "released") && remainingMilestoneEscrow >= milestoneAmount;
-    if (!canRelease) {
-      const shortfall = Math.max(0, milestoneAmount - remainingMilestoneEscrow);
-      setApprovalErrorMessage(shortfall > 0 ? `You need to fund ${shortfall.toLocaleString()} sats more in escrow before approving this milestone.` : "This milestone is not funded yet. Fund escrow before approving work.");
-      return;
-    }
-    // const lightningAddress = freelancerData?.settings?.payment?.lightningAddress;
-     const lightningAddress =
-  freelancerData?.settings?.payment?.lightningAddress ||
-  freelancerData?.lightningAddress ||
-  freelancerData?.settings?.lightningAddress;
+    if (!pendingApprovalJobId || isApprovingRef.current) return;
 
-    if (!lightningAddress) { setApprovalErrorMessage("Freelancer has not set up a Lightning address. Payment cannot be processed."); return; }
+    isApprovingRef.current = true;
+    setIsApproving(true);
+
     try {
-      if (milestoneAmount <= 0) { setApprovalErrorMessage("Unable to calculate milestone amount."); return; }
+      const job = submittedJobs.find((j) => j.id === pendingApprovalJobId);
+      const contract = job ? contracts.find((c) => c.id === job.contractId) : null;
+      if (!job || !contract) {
+        setApprovalErrorMessage("Unable to find the contract for this submission.");
+        isApprovingRef.current = false;
+        setIsApproving(false);
+        return;
+      }
+      const paymentStatus = contract.paymentStatus ?? "unfunded";
+      const fundedInstallments = contract.paymentCurrentInstallment ?? 0;
+      const totalInstallments = contract.paymentInstallments ?? 1;
+      const releasedInstallments = contract.paymentReleasedInstallments ?? 0;
+      const nextMilestoneIndex = releasedInstallments + 1;
+      const milestone = contract.milestones?.find((item: any, index) => Number(item.index ?? index + 1) === nextMilestoneIndex);
+      const totalAmount = contract.paymentTotalAmountSats || parseSats(contract.budget) || 0;
+      const milestoneAmount = Number((milestone as any)?.freelancerAmountSats ?? calculateInstallmentAmount(totalAmount, totalInstallments, nextMilestoneIndex));
+      const milestoneFundedSats = milestone ? Number((milestone as any).fundedSats ?? 0) : milestoneAmount;
+      const milestoneReleasedSats = milestone ? Number((milestone as any).releasedSats ?? 0) : 0;
+      const remainingMilestoneEscrow = Math.max(0, milestoneFundedSats - milestoneReleasedSats);
+
+      // Strict Guards to prevent overpaying beyond job total or index limits
+      if (nextMilestoneIndex > totalInstallments) {
+        setApprovalErrorMessage("All milestones for this contract have already been approved and paid.");
+        isApprovingRef.current = false;
+        setIsApproving(false);
+        return;
+      }
+
+      if ((contract.escrowReleasedSats ?? 0) + milestoneAmount > totalAmount) {
+        setApprovalErrorMessage(`Releasing ${milestoneAmount.toLocaleString()} sats would exceed the total contract budget of ${totalAmount.toLocaleString()} sats.`);
+        isApprovingRef.current = false;
+        setIsApproving(false);
+        return;
+      }
+
+      if ((contract.escrowReleasedSats ?? 0) + milestoneAmount > (contract.escrowFundedTotalSats ?? 0)) {
+        setApprovalErrorMessage(`Releasing ${milestoneAmount.toLocaleString()} sats would exceed the funded escrow balance.`);
+        isApprovingRef.current = false;
+        setIsApproving(false);
+        return;
+      }
+
+      const canRelease = fundedInstallments >= nextMilestoneIndex && (paymentStatus === "funded" || paymentStatus === "released") && remainingMilestoneEscrow >= milestoneAmount;
+      if (!canRelease) {
+        const shortfall = Math.max(0, milestoneAmount - remainingMilestoneEscrow);
+        setApprovalErrorMessage(shortfall > 0 ? `You need to fund ${shortfall.toLocaleString()} sats more in escrow before approving this milestone.` : "This milestone is not funded yet. Fund escrow before approving work.");
+        isApprovingRef.current = false;
+        setIsApproving(false);
+        return;
+      }
+
+      const lightningAddress =
+        freelancerData?.settings?.payment?.lightningAddress ||
+        freelancerData?.lightningAddress ||
+        freelancerData?.settings?.lightningAddress;
+
+      if (!lightningAddress) {
+        setApprovalErrorMessage("Freelancer has not set up a Lightning address. Payment cannot be processed.");
+        isApprovingRef.current = false;
+        setIsApproving(false);
+        return;
+      }
+
+      if (milestoneAmount <= 0) {
+        setApprovalErrorMessage("Unable to calculate milestone amount.");
+        isApprovingRef.current = false;
+        setIsApproving(false);
+        return;
+      }
+
       const paymentResponse = await fetch("/api/send-payment", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lightningAddress, amount: milestoneAmount, memo: `Milestone ${nextMilestoneIndex} payment for contract: ${contract.title}` }) });
       const rawPaymentResponse = await paymentResponse.text();
       let paymentData: any = null;
@@ -629,6 +677,9 @@ export default function ClientContractsContent() {
     } catch (error) {
       console.error("Error approving submission:", error);
       setApprovalErrorMessage(error instanceof Error ? error.message : "Failed to approve the submission and send payment. Please try again.");
+    } finally {
+      isApprovingRef.current = false;
+      setIsApproving(false);
     }
   };
 
@@ -697,43 +748,43 @@ export default function ClientContractsContent() {
       // } catch (e) { console.error(e); setFreelancerData(null); }
       // finally { setLoadingFreelancer(false); }
       if (!freelancerId && contract?.id) {
-  try {
-    const snap = await getDoc(doc(firebaseDb, "contracts", contract.id));
-    if (snap.exists()) {
-      const d = snap.data() as any;
-      freelancerId = d.freelancerId || d.freelancerUid || d.freelancer_id;
-    }
-  } catch (e) { console.error(e); }
-}
-if (!freelancerId) { setFreelancerData(null); setLoadingFreelancer(false); return; }
-setLoadingFreelancer(true);
-try {
-  // 1. Try freelancers/{freelancerId} by doc ID
-  const snap = await getDoc(doc(firebaseDb, "freelancers", freelancerId));
-  if (snap.exists()) {
-    setFreelancerData(snap.data());
-    return;
-  }
-  // 2. Try querying freelancers by uid field (doc ID may differ from uid)
-  const q = query(collection(firebaseDb, "freelancers"), where("uid", "==", freelancerId), limit(1));
-  const qSnap = await getDocs(q);
-  if (!qSnap.empty) {
-    setFreelancerData(qSnap.docs[0].data());
-    return;
-  }
-  // 3. Final fallback: all_users — older users may only have data here
-  const allUsersSnap = await getDoc(doc(firebaseDb, "all_users", freelancerId));
-  if (allUsersSnap.exists()) {
-    setFreelancerData(allUsersSnap.data());
-    return;
-  }
-  setFreelancerData(null);
-} catch (e) {
-  console.error("fetchFreelancerPaymentData error:", e);
-  setFreelancerData(null);
-} finally {
-  setLoadingFreelancer(false);
-}
+        try {
+          const snap = await getDoc(doc(firebaseDb, "contracts", contract.id));
+          if (snap.exists()) {
+            const d = snap.data() as any;
+            freelancerId = d.freelancerId || d.freelancerUid || d.freelancer_id;
+          }
+        } catch (e) { console.error(e); }
+      }
+      if (!freelancerId) { setFreelancerData(null); setLoadingFreelancer(false); return; }
+      setLoadingFreelancer(true);
+      try {
+        // 1. Try freelancers/{freelancerId} by doc ID
+        const snap = await getDoc(doc(firebaseDb, "freelancers", freelancerId));
+        if (snap.exists()) {
+          setFreelancerData(snap.data());
+          return;
+        }
+        // 2. Try querying freelancers by uid field (doc ID may differ from uid)
+        const q = query(collection(firebaseDb, "freelancers"), where("uid", "==", freelancerId), limit(1));
+        const qSnap = await getDocs(q);
+        if (!qSnap.empty) {
+          setFreelancerData(qSnap.docs[0].data());
+          return;
+        }
+        // 3. Final fallback: all_users — older users may only have data here
+        const allUsersSnap = await getDoc(doc(firebaseDb, "all_users", freelancerId));
+        if (allUsersSnap.exists()) {
+          setFreelancerData(allUsersSnap.data());
+          return;
+        }
+        setFreelancerData(null);
+      } catch (e) {
+        console.error("fetchFreelancerPaymentData error:", e);
+        setFreelancerData(null);
+      } finally {
+        setLoadingFreelancer(false);
+      }
     };
     fetchFreelancerPaymentData();
   }, [pendingApprovalJobId, submittedJobs, contracts]);
@@ -872,8 +923,10 @@ try {
                             <div className="flex-1 min-w-0">
                               <p className="text-[14px] font-black leading-snug text-gray-900 break-words">{contract.title}</p>
                               <p className="text-[12px] text-gray-400 mt-0.5 truncate">with {contract.freelancer}</p>
+                              <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                                <StatusBadge label={statusLabel} />
+                              </div>
                             </div>
-                            <StatusBadge label={statusLabel} />
                           </div>
                           {/* Stats grid */}
                           <div className="grid grid-cols-2 gap-2 text-[12px]">
@@ -936,7 +989,7 @@ try {
                           </div>
                           <div className="border-l border-gray-100 px-4">
                             <p className="font-bold text-[13px] text-gray-900">{contract.paymentTotalAmountSats ? `${contract.paymentTotalAmountSats.toLocaleString()} sats` : contract.budget}</p>
-                            {perMs > 0 && <p className="text-[10px] text-gray-400">{perMs.toLocaleString()} sats<br/>per milestone</p>}
+                            {perMs > 0 && <p className="text-[10px] text-gray-400">{perMs.toLocaleString()} sats<br />per milestone</p>}
                           </div>
                           <div className="border-l border-gray-100 px-4 text-[11px]">
                             <p className="font-semibold text-gray-700">{contract.startDate} -</p>
@@ -1111,60 +1164,60 @@ try {
                 <p className="text-sm text-gray-400 mt-1">You don't have any submitted work yet</p>
               </div>
             ) : (
-              <div className="grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)] xl:items-start">
+              <div className="w-full max-w-full min-w-0 grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)] xl:items-start">
                 {/* Left: list */}
-                <div className="flex min-h-0 flex-col space-y-3 xl:max-h-[var(--review-list-height)] xl:overflow-hidden" style={reviewListHeight ? ({ "--review-list-height": `${reviewListHeight}px` } as any) : undefined}>
-                  <div className="rounded-xl border border-gray-100 bg-white px-4 py-4 shadow-[0_1px_8px_rgba(15,23,42,0.04)]">
+                <div className="w-full max-w-full min-w-0 flex min-h-0 flex-col space-y-3 xl:max-h-[var(--review-list-height)] xl:overflow-hidden" style={reviewListHeight ? ({ "--review-list-height": `${reviewListHeight}px` } as any) : undefined}>
+                  <div className="w-full max-w-full min-w-0 rounded-xl border border-gray-100 bg-white px-4 py-4 shadow-[0_1px_8px_rgba(15,23,42,0.04)]">
                     <h2 className="font-black text-gray-900">Submitted Jobs ({submittedJobsForReview.length})</h2>
                     <p className="text-[12px] text-gray-400">All work submitted by freelancers for this client account.</p>
                   </div>
-                  <div className="min-h-0 flex-1 space-y-3 xl:overflow-y-auto xl:pr-1">
-                  {submittedJobsForReview.map((job) => {
-                    const contract = contracts.find((c) => c.id === job.contractId);
-                    const isSelected = selectedSubmissionId === job.id || (!selectedSubmissionId && submittedJobsForReview[0]?.id === job.id);
-                    const total = contract?.paymentTotalAmountSats ?? 0;
-                    const releasedCount = contract?.paymentReleasedInstallments ?? 0;
-                    const totalMs = contract?.milestones?.length ?? contract?.paymentInstallments ?? 0;
-                    const currentMilestone = job.milestoneIndex ?? Math.min(releasedCount + 1, totalMs || releasedCount + 1);
-                    const progress = totalMs > 0 ? Math.round((currentMilestone / totalMs) * 100) : contract?.progress ?? 0;
-                    const jobStatusLabel = job.status === "approved" ? "Approved" : job.status === "rejected" ? "Return for adjustment" : "Awaiting review";
-                    const jobStatusColor = job.status === "approved" ? "text-green-600" : job.status === "rejected" ? "text-red-600" : "text-orange-600";
-                    return (
-                      <button key={job.id} type="button" onClick={() => { setSelectedSubmissionId(job.id); if (typeof window !== "undefined" && window.innerWidth < 1280) setIsSubmissionModalOpen(true); }}
-                        className={`w-full rounded-xl border px-4 py-4 text-left shadow-[0_1px_8px_rgba(15,23,42,0.04)] transition-all ${isSelected ? "border-orange-300 bg-orange-50/70 ring-1 ring-orange-200" : "border-gray-100 bg-white hover:border-gray-200 hover:shadow-md"}`}>
-                        <div className="flex items-start gap-3">
-                          <Avatar name={contract?.freelancer ?? "F"} size="sm" />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-start justify-between gap-2">
-                              <p className="truncate text-[13px] font-black leading-snug text-gray-900">{contract?.title ?? "Contract"}</p>
-                              <span className="flex-shrink-0 rounded-lg bg-orange-100 px-2 py-1 text-[10px] font-black text-orange-700">
-                                Milestone {currentMilestone} / {totalMs || "?"}
-                              </span>
-                            </div>
-                            <p className="text-[11px] text-gray-400 mt-0.5">Freelancer: {contract?.freelancer}</p>
-                          </div>
-                        </div>
-                        <div className="mt-4 grid grid-cols-[1fr_96px_18px] items-center gap-3">
-                          <div className={`flex items-center gap-1 text-[10px] ${jobStatusColor}`}>
-                            <Clock className="h-3 w-3" />
-                            <div>
-                              <p className="font-black">{jobStatusLabel}</p>
-                              <p className="mt-0.5 text-gray-400">Submitted: {job.submittedAt.toLocaleDateString()}</p>
+                  <div className="w-full max-w-full min-w-0 min-h-0 flex-1 space-y-3 xl:overflow-y-auto xl:pr-1">
+                    {submittedJobsForReview.map((job) => {
+                      const contract = contracts.find((c) => c.id === job.contractId);
+                      const isSelected = selectedSubmissionId === job.id || (!selectedSubmissionId && submittedJobsForReview[0]?.id === job.id);
+                      const total = contract?.paymentTotalAmountSats ?? 0;
+                      const releasedCount = contract?.paymentReleasedInstallments ?? 0;
+                      const totalMs = contract?.milestones?.length ?? contract?.paymentInstallments ?? 0;
+                      const currentMilestone = job.milestoneIndex ?? Math.min(releasedCount + 1, totalMs || releasedCount + 1);
+                      const progress = totalMs > 0 ? Math.round((currentMilestone / totalMs) * 100) : contract?.progress ?? 0;
+                      const jobStatusLabel = job.status === "approved" ? "Approved" : job.status === "rejected" ? "Return for adjustment" : "Awaiting review";
+                      const jobStatusColor = job.status === "approved" ? "text-green-600" : job.status === "rejected" ? "text-red-600" : "text-orange-600";
+                      return (
+                        <button key={job.id} type="button" onClick={() => { setSelectedSubmissionId(job.id); if (typeof window !== "undefined" && window.innerWidth < 1280) setIsSubmissionModalOpen(true); }}
+                          className={`w-full max-w-full min-w-0 rounded-xl border px-4 py-4 text-left shadow-[0_1px_8px_rgba(15,23,42,0.04)] transition-all ${isSelected ? "border-orange-300 bg-orange-50/70 ring-1 ring-orange-200" : "border-gray-100 bg-white hover:border-gray-200 hover:shadow-md"}`}>
+                          <div className="flex items-start gap-3">
+                            <Avatar name={contract?.freelancer ?? "F"} size="sm" />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between gap-2">
+                                <p className="truncate text-[13px] font-black leading-snug text-gray-900">{contract?.title ?? "Contract"}</p>
+                                <span className="flex-shrink-0 rounded-lg bg-orange-100 px-2 py-1 text-[10px] font-black text-orange-700">
+                                  Milestone {currentMilestone} / {totalMs || "?"}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-gray-400 mt-0.5 truncate">Freelancer: {contract?.freelancer}</p>
                             </div>
                           </div>
-                          <div className="border-l border-gray-100 pl-3">
-                            <p className="text-[10px] text-gray-400">Budget</p>
-                            <p className="text-[11px] font-black text-gray-800">{total > 0 ? `${total.toLocaleString()} sats` : contract?.budget}</p>
+                          <div className="mt-4 grid grid-cols-[1fr_auto_18px] items-center gap-3">
+                            <div className={`flex items-center gap-1 text-[10px] ${jobStatusColor} min-w-0`}>
+                              <Clock className="h-3 w-3 flex-shrink-0" />
+                              <div className="min-w-0 flex-1">
+                                <p className="font-black truncate">{jobStatusLabel}</p>
+                                <p className="mt-0.5 text-gray-400 truncate">Submitted: {job.submittedAt.toLocaleDateString()}</p>
+                              </div>
+                            </div>
+                            <div className="border-l border-gray-100 pl-3 flex-shrink-0">
+                              <p className="text-[10px] text-gray-400">Budget</p>
+                              <p className="text-[11px] font-black text-gray-800">{total > 0 ? `${total.toLocaleString()} sats` : contract?.budget}</p>
+                            </div>
+                            <ChevronRight className={`h-4 w-4 flex-shrink-0 ${isSelected ? "text-orange-500" : "text-gray-300"}`} />
                           </div>
-                          <ChevronRight className={`h-4 w-4 ${isSelected ? "text-orange-500" : "text-gray-300"}`} />
-                        </div>
-                        <div className="mt-2">
-                          <ProgressBar percent={progress} color="orange" />
-                          <p className="text-right text-[10px] text-gray-400 mt-0.5">{progress}% Complete</p>
-                        </div>
-                      </button>
-                    );
-                  })}
+                          <div className="mt-2">
+                            <ProgressBar percent={progress} color="orange" />
+                            <p className="text-right text-[10px] text-gray-400 mt-0.5">{progress}% Complete</p>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -1670,9 +1723,21 @@ try {
                   {approvalErrorMessage && <div className="mt-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-[12px] text-red-700">{approvalErrorMessage}</div>}
                   <p className="mt-3 text-center text-[11px] text-gray-400">By approving, you confirm the milestone payment will be processed to the freelancer's Lightning wallet.</p>
                   <div className="mt-4 flex gap-3">
-                    <button type="button" onClick={() => { setShowPaymentModal(false); setPendingApprovalJobId(null); setApprovalErrorMessage(""); }} className="flex-1 rounded-xl border border-gray-200 bg-white py-3 text-[13px] font-bold text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>
-                    <button type="button" onClick={confirmApproveWithPayment} disabled={!canApprove} className="flex-1 rounded-xl bg-orange-500 py-3 text-[13px] font-bold text-white hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                      {canApprove ? "Approve & Pay" : "Fund Escrow First"}
+                    <button type="button" disabled={isApproving} onClick={() => { setShowPaymentModal(false); setPendingApprovalJobId(null); setApprovalErrorMessage(""); }} className="flex-1 rounded-xl border border-gray-200 bg-white py-3 text-[13px] font-bold text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50">Cancel</button>
+                    <button type="button" onClick={confirmApproveWithPayment} disabled={!canApprove || isApproving} className="flex-1 rounded-xl bg-orange-500 py-3 text-[13px] font-bold text-white hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5">
+                      {isApproving ? (
+                        <>
+                          <svg className="animate-spin h-3.5 w-3.5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Processing...
+                        </>
+                      ) : canApprove ? (
+                        "Approve & Pay"
+                      ) : (
+                        "Fund Escrow First"
+                      )}
                     </button>
                   </div>
                 </div>

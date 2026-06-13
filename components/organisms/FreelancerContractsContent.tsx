@@ -2271,8 +2271,10 @@ export default function FreelancerContractsContent() {
                             <div className="flex-1 min-w-0">
                               <p className="text-[14px] font-black leading-snug text-gray-900 break-words">{contract.title}</p>
                               <p className="text-[12px] text-gray-400 mt-0.5 truncate">Client: {contract.clientName}</p>
+                              <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                                <StatusBadge label={statusLabel} />
+                              </div>
                             </div>
-                            <StatusBadge label={statusLabel} />
                           </div>
                           <div className="grid grid-cols-2 gap-2 text-[12px]">
                             <div className="rounded-lg bg-gray-50 px-3 py-2">
@@ -2482,14 +2484,14 @@ export default function FreelancerContractsContent() {
                 <p className="text-sm text-gray-400 mt-1">You haven't submitted any work yet</p>
               </div>
             ) : (
-              <div className="grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)] xl:items-start">
+              <div className="w-full max-w-full min-w-0 grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)] xl:items-start">
                 {/* Left: list */}
-                <div className="flex min-h-0 flex-col space-y-3 xl:max-h-[var(--review-list-height)] xl:overflow-hidden" style={reviewListHeight ? ({ "--review-list-height": `${reviewListHeight}px` } as any) : undefined}>
-                  <div className="rounded-xl border border-gray-100 bg-white px-4 py-4 shadow-[0_1px_8px_rgba(15,23,42,0.04)]">
+                <div className="w-full max-w-full min-w-0 flex min-h-0 flex-col space-y-3 xl:max-h-[var(--review-list-height)] xl:overflow-hidden" style={reviewListHeight ? ({ "--review-list-height": `${reviewListHeight}px` } as any) : undefined}>
+                  <div className="w-full max-w-full min-w-0 rounded-xl border border-gray-100 bg-white px-4 py-4 shadow-[0_1px_8px_rgba(15,23,42,0.04)]">
                     <h2 className="font-black text-gray-900">Submitted Jobs ({filteredSubmittedJobs.length})</h2>
                     <p className="text-[12px] text-gray-400">All work you've submitted to clients.</p>
                   </div>
-                  <div className="min-h-0 flex-1 space-y-3 xl:overflow-y-auto xl:pr-1">
+                  <div className="w-full max-w-full min-w-0 min-h-0 flex-1 space-y-3 xl:overflow-y-auto xl:pr-1">
                     {filteredSubmittedJobs.map((job) => {
                       const contract = contracts.find((c) => c.id === job.contractId);
                       const isSelected = selectedSubmissionId === job.id || (!selectedSubmissionId && filteredSubmittedJobs[0]?.id === job.id);
@@ -2503,7 +2505,7 @@ export default function FreelancerContractsContent() {
                       return (
                         <button key={job.id} type="button"
                           onClick={() => { setSelectedSubmissionId(job.id); if (typeof window !== "undefined" && window.innerWidth < 1280) setIsSubmissionModalOpen(true); }}
-                          className={`w-full rounded-xl border px-4 py-4 text-left shadow-[0_1px_8px_rgba(15,23,42,0.04)] transition-all ${isSelected ? "border-orange-300 bg-orange-50/70 ring-1 ring-orange-200" : "border-gray-100 bg-white hover:border-gray-200 hover:shadow-md"}`}>
+                          className={`w-full max-w-full min-w-0 rounded-xl border px-4 py-4 text-left shadow-[0_1px_8px_rgba(15,23,42,0.04)] transition-all ${isSelected ? "border-orange-300 bg-orange-50/70 ring-1 ring-orange-200" : "border-gray-100 bg-white hover:border-gray-200 hover:shadow-md"}`}>
                           <div className="flex items-start gap-3">
                             <Avatar name={contract?.clientName ?? "C"} size="sm" />
                             <div className="flex-1 min-w-0">
@@ -2513,22 +2515,22 @@ export default function FreelancerContractsContent() {
                                   Milestone {currentMilestone} / {totalMs || "?"}
                                 </span>
                               </div>
-                              <p className="text-[11px] text-gray-400 mt-0.5">Client: {contract?.clientName}</p>
+                              <p className="text-[11px] text-gray-400 mt-0.5 truncate">Client: {contract?.clientName}</p>
                             </div>
                           </div>
-                          <div className="mt-4 grid grid-cols-[1fr_96px_18px] items-center gap-3">
-                            <div className={`flex items-center gap-1 text-[10px] ${jobStatusColor}`}>
-                              <Clock className="h-3 w-3" />
-                              <div>
-                                <p className="font-black">{jobStatusLabel}</p>
-                                <p className="mt-0.5 text-gray-400">Submitted: {job.submittedAt.toLocaleDateString()}</p>
+                          <div className="mt-4 grid grid-cols-[1fr_auto_18px] items-center gap-3">
+                            <div className={`flex items-center gap-1 text-[10px] ${jobStatusColor} min-w-0`}>
+                              <Clock className="h-3 w-3 flex-shrink-0" />
+                              <div className="min-w-0 flex-1">
+                                <p className="font-black truncate">{jobStatusLabel}</p>
+                                <p className="mt-0.5 text-gray-400 truncate">Submitted: {job.submittedAt.toLocaleDateString()}</p>
                               </div>
                             </div>
-                            <div className="border-l border-gray-100 pl-3">
+                            <div className="border-l border-gray-100 pl-3 flex-shrink-0">
                               <p className="text-[10px] text-gray-400">Budget</p>
                               <p className="text-[11px] font-black text-gray-800">{total > 0 ? `${total.toLocaleString()} sats` : contract?.budget}</p>
                             </div>
-                            <ChevronRight className={`h-4 w-4 ${isSelected ? "text-orange-500" : "text-gray-300"}`} />
+                            <ChevronRight className={`h-4 w-4 flex-shrink-0 ${isSelected ? "text-orange-500" : "text-gray-300"}`} />
                           </div>
                           <div className="mt-2">
                             <ProgressBar percent={progress} color={job.status === "rejected" ? "red" : job.status === "approved" ? "green" : "orange"} />

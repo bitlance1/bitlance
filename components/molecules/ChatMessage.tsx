@@ -724,11 +724,13 @@ function formatMessageText(text: string, isMe: boolean) {
           <a
             key={`link-${elements.length}-${index}`}
             href={part}
-            className={`inline-flex items-center gap-1 rounded-full px-3 py-1 underline-offset-4 transition-colors text-[#fff]
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`inline-flex flex-wrap items-center gap-1 rounded-2xl px-3 py-1.5 underline-offset-4 transition-colors text-[#fff] break-all max-w-full
               ${isMe ? 'bg-[#b86200] hover:bg-[#9a5200]' : 'bg-[#CC7000] hover:bg-[#b45e00]'}`}
           >
-            <LinkIcon className="w-3 h-3" />
-            {part}
+            <LinkIcon className="w-3 h-3 shrink-0" />
+            <span className="break-all min-w-0">{part}</span>
           </a>
         );
         return;
@@ -746,11 +748,13 @@ function formatMessageText(text: string, isMe: boolean) {
       <a
         key={`markdown-link-${elements.length}`}
         href={url}
-        className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-white underline-offset-4 transition-colors
+        target="_blank"
+        rel="noopener noreferrer"
+        className={`inline-flex flex-wrap items-center gap-1 rounded-2xl px-3 py-1.5 text-white underline-offset-4 transition-colors max-w-full break-all
           ${isMe ? 'bg-[#b86200] hover:bg-[#9a5200]' : 'bg-[#CC7000] hover:bg-[#b45e00]'}`}
       >
-        <LinkIcon className="w-3 h-3" />
-        {label}
+        <LinkIcon className="w-3 h-3 shrink-0" />
+        <span className="break-all min-w-0">{label}</span>
       </a>
     );
     lastIndex = match.index + match[0].length;
@@ -807,7 +811,7 @@ export default function ChatMessage({
       {/* Bubble */}
       <div
         className={`
-          max-w-[78%] px-4 py-3 rounded-2xl shadow-sm
+          max-w-[78%] min-w-0 px-4 py-3 rounded-2xl shadow-sm
           ${isMe
             ? 'bg-[#CC7000] text-white rounded-br-md shadow-orange-950/10'
             : 'bg-white text-[#232323] border border-[#ece7df] rounded-bl-md shadow-gray-200'}
