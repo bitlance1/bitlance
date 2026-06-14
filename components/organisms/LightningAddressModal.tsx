@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { createPortal } from "react-dom";
+import { useState, useEffect } from "react";
 import { LightningConnect, useWalletConnect, type Connection } from "lightningconnect";
 import { firebaseDb } from "@/lib/firebase";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
@@ -31,9 +30,9 @@ export type { Connection };
 
 // ─── Helper: extract a display address from any Connection type ───────────────
 export function getAddressFromConnection(connection: Connection): string {
-  if (connection.type === "blink-address") return connection.address;
+  if (connection.type === "blink-address") return (connection as any).address;
   if (connection.type === "blink-api") return connection.walletName || "Blink API Key";
-  if (connection.type === "nwc") return connection.connectionString;
+  if (connection.type === "nwc") return (connection as any).connectionString;
   return "";
 }
 
@@ -52,27 +51,28 @@ export function ConnectorBadge({ connectorType }: { connectorType: string }) {
   );
 }
 
-// ─── useLightningTheme — persisted light/dark preference ─────────────────────
+// ─── useLightningTheme — synced with library preference ─────────────────────
 export function useLightningTheme() {
-  const [isDark, setIsDark] = useState(true);
+  const [mode, setMode] = useState<"light" | "dark">("dark");
 
   useEffect(() => {
-    try {
+    const update = () => {
       const saved = localStorage.getItem(MODE_KEY);
-      if (saved === "light") setIsDark(false);
-      else if (saved === "dark") setIsDark(true);
-    } catch {}
+      if (saved === "light") setMode("light");
+      else setMode("dark");
+    };
+    update();
+    window.addEventListener("storage", update);
+    return () => window.removeEventListener("storage", update);
   }, []);
 
   const toggle = () => {
-    setIsDark((prev) => {
-      const next = !prev;
-      try { localStorage.setItem(MODE_KEY, next ? "dark" : "light"); } catch {}
-      return next;
-    });
+    const next = mode === "dark" ? "light" : "dark";
+    setMode(next);
+    localStorage.setItem(MODE_KEY, next);
   };
 
-  return { isDark, theme: isDark ? DARK_THEME : LIGHT_THEME, toggle };
+  return { isDark: mode === "dark", mode, toggle };
 }
 
 // ─── Sun icon ─────────────────────────────────────────────────────────────────
@@ -101,59 +101,6 @@ function MoonIcon() {
   );
 }
 
-// ─── ModalThemeToggle ─────────────────────────────────────────────────────────
-// Watches for the package's modal to appear in the DOM, hides the ? button,
-// and injects our sun/moon toggle in its exact place via a portal.
-function ModalThemeToggle({ isDark, toggle }: { isDark: boolean; toggle: () => void }) {
-  const [questionBtn, setQuestionBtn] = useState<HTMLButtonElement | null>(null);
-
-  useEffect(() => {
-    const observer = new MutationObserver(() => {
-      const overlay = document.querySelector('[style*="z-index: 9999"]');
-      if (!overlay) { setQuestionBtn(null); return; }
-
-      const buttons = Array.from(overlay.querySelectorAll("button")) as HTMLButtonElement[];
-      const qBtn = buttons.find((b) => b.textContent?.trim() === "?");
-      if (qBtn && qBtn !== questionBtn) {
-        // Completely hide the ? button
-        qBtn.style.display = "none";
-        setQuestionBtn(qBtn);
-      }
-    });
-
-    observer.observe(document.body, { childList: true, subtree: true });
-    return () => observer.disconnect();
-  }, [questionBtn]);
-
-  if (!questionBtn?.parentElement) return null;
-
-  return createPortal(
-    <button
-      onClick={(e) => { e.stopPropagation(); toggle(); }}
-      title={isDark ? "Switch to light mode" : "Switch to dark mode"}
-      style={{
-        position: "absolute",
-        top: 0,
-        right: 0,
-        width: 32,
-        height: 32,
-        borderRadius: "50%",
-        border: `1px solid ${isDark ? "#444" : "#ccc"}`,
-        background: isDark ? "#1a1a1a" : "#f5f5f5",
-        color: isDark ? "#F5F5F5" : "#555",
-        cursor: "pointer",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 10000,
-      }}
-    >
-      {isDark ? <SunIcon /> : <MoonIcon />}
-    </button>,
-    questionBtn.parentElement
-  );
-}
-
 // ─── LightningWalletButton ────────────────────────────────────────────────────
 type Props = {
   uid: string;
@@ -170,7 +117,7 @@ export function LightningWalletButton({
   lightningConnectorType,
   onSaved,
 }: Props) {
-  const { isDark, theme, toggle } = useLightningTheme();
+  const { isDark, mode, toggle } = useLightningTheme();
   const { connect, isConnected, walletInfo, connectionType } = useWalletConnect();
 
   // Save to Firebase when user connects
@@ -195,10 +142,11 @@ export function LightningWalletButton({
   return (
     <>
       {/* Always mounted — manages its own modal open/close */}
-      <LightningConnect theme={theme} />
-
-      {/* Injects sun/moon toggle into the modal's ? button slot */}
-      <ModalThemeToggle isDark={isDark} toggle={toggle} />
+      <LightningConnect 
+        theme={DARK_THEME} 
+        lightTheme={LIGHT_THEME} 
+        defaultMode={mode}
+      />
 
       {displayAddress ? (
         <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-[#F9F6F2] border border-[#EAE7E2]">
