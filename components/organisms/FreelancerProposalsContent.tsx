@@ -176,7 +176,7 @@ export default function FreelancerProposalsContent() {
   };
 
   return (
-    <section className="w-full space-y-5">
+    <section className="w-full max-w-full space-y-5 overflow-x-hidden">
       {/* ── Page header ── */}
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -306,7 +306,7 @@ function ProposalCard({ proposal, onClick }: { proposal: Proposal; onClick: () =
   const isRejected = proposal.status === "rejected";
 
   return (
-    <div onClick={onClick} className="relative rounded-[16px] border border-[#EAE7E2] bg-white shadow-sm cursor-pointer hover:border-[#F7931A]/40 hover:shadow-md transition-all">
+    <div onClick={onClick} className="relative w-full max-w-full overflow-hidden rounded-[16px] border border-[#EAE7E2] bg-white shadow-sm cursor-pointer hover:border-[#F7931A]/40 hover:shadow-md transition-all">
       {/* three-dot */}
       <button type="button" aria-label="More options" onClick={(e) => e.stopPropagation()}
         className="absolute right-4 top-4 flex h-7 w-7 items-center justify-center rounded-full text-[#C0B9B0] hover:bg-[#F7F4F0]">
@@ -318,7 +318,7 @@ function ProposalCard({ proposal, onClick }: { proposal: Proposal; onClick: () =
       <div className="flex flex-col gap-4 p-5 pr-12 md:flex-row md:items-start md:gap-6">
 
         {/* Col 1: Client info */}
-        <div className="flex shrink-0 gap-3 md:w-[180px] md:flex-col md:gap-2">
+        <div className="flex shrink-0 gap-3 w-full md:max-w-[160px] md:flex-col md:gap-2">
           <div className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full bg-[#1a2332] text-[14px] font-bold text-white">
             {(proposal.clientName?.[0] ?? "C").toUpperCase()}
           </div>
@@ -329,14 +329,14 @@ function ProposalCard({ proposal, onClick }: { proposal: Proposal; onClick: () =
         </div>
 
         {/* Col 2: Applied For */}
-        <div className="shrink-0 md:w-[200px]">
+        <div className="shrink-0 w-full md:max-w-[180px]">
           <div className="mb-1 text-[9px] font-bold uppercase tracking-[0.18em] text-[#9e9690]">Applied For</div>
           <div className="text-[14px] font-bold leading-snug text-[#1a1a1a]">{proposal.jobTitle}</div>
           <div className="mt-1.5 text-[11px] text-[#9e9690]">{proposal.pricingType}</div>
         </div>
 
         {/* Col 3: Requested */}
-        <div className="shrink-0 md:w-[110px]">
+        <div className="shrink-0 w-full md:max-w-[100px]">
           <div className="mb-1 text-[9px] font-bold uppercase tracking-[0.18em] text-[#9e9690]">Requested</div>
           <div className="flex items-center gap-1">
             <svg width="12" height="14" viewBox="0 0 13 20" fill="#F7931A"><path d="M8 0L0 11h6l-1 9 9-13H8V0z"/></svg>
@@ -367,7 +367,7 @@ function ProposalCard({ proposal, onClick }: { proposal: Proposal; onClick: () =
         </div>
 
         {/* Col 5: Status */}
-        <div className="flex shrink-0 flex-col gap-2 md:w-[140px]">
+        <div className="flex shrink-0 flex-col gap-2 w-full md:max-w-[130px]">
           {isPending && (
             <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#F7931A]">
               <span className="h-1.5 w-1.5 rounded-full bg-[#F7931A]" />PENDING

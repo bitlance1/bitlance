@@ -359,7 +359,7 @@ export default function ClientProposalsContent() {
   }), [proposals]);
 
   return (
-    <section className="w-full space-y-5">
+    <section className="w-full max-w-full space-y-5 overflow-x-hidden">
       {/* ── Page header ── */}
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -493,7 +493,7 @@ export default function ClientProposalsContent() {
           const isBusy = actionId === proposal.id;
 
           return (
-            <div key={proposal.id} className="relative rounded-[16px] border border-[#EAE7E2] bg-white shadow-sm">
+            <div key={proposal.id} className="relative w-full max-w-full overflow-hidden rounded-[16px] border border-[#EAE7E2] bg-white shadow-sm">
               {/* three-dot */}
               <button type="button" aria-label="More options"
                 className="absolute right-4 top-4 flex h-7 w-7 items-center justify-center rounded-full text-[#C0B9B0] hover:bg-[#F7F4F0]">
@@ -505,7 +505,7 @@ export default function ClientProposalsContent() {
               <div className="flex flex-col gap-5 p-5 pr-12 md:flex-row md:items-start md:gap-6">
 
                 {/* Col 1: Freelancer */}
-                <div className="flex shrink-0 gap-3 md:w-[190px] md:flex-col md:gap-2">
+                <div className="flex shrink-0 gap-3 w-full md:max-w-[170px] md:flex-col md:gap-2">
                   {/* Avatar — real photo or initials fallback */}
                   <div className="relative h-[64px] w-[64px] shrink-0">
                     {proposal.freelancerAvatarUrl ? (
@@ -551,7 +551,7 @@ export default function ClientProposalsContent() {
                 </div>
 
                 {/* Col 2: Applied For */}
-                <div className="shrink-0 md:w-[190px]">
+                <div className="shrink-0 w-full md:max-w-[170px]">
                   <div className="mb-1 text-[9px] font-bold uppercase tracking-[0.18em] text-[#9e9690]">Applied For</div>
                   <div className="text-[14px] font-bold leading-snug text-[#1a1a1a]">{job?.title ?? proposal.jobTitle}</div>
                   <div className="mt-2 flex flex-wrap gap-1.5">
@@ -568,7 +568,7 @@ export default function ClientProposalsContent() {
                 </div>
 
                 {/* Col 3: Requested */}
-                <div className="shrink-0 md:w-[110px]">
+                <div className="shrink-0 w-full md:max-w-[100px]">
                   <div className="mb-1 text-[9px] font-bold uppercase tracking-[0.18em] text-[#9e9690]">Requested</div>
                   <div className="flex items-center gap-1">
                     <svg width="13" height="16" viewBox="0 0 13 20" fill="#F7931A">
@@ -605,7 +605,7 @@ export default function ClientProposalsContent() {
                 </div>
 
                 {/* Col 5: Status + actions */}
-                <div className="flex shrink-0 flex-col gap-2 md:w-[180px]">
+                <div className="flex shrink-0 flex-col gap-2 w-full md:max-w-[160px]">
                   {isPending && (
                     <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#F7931A]">
                       <span className="h-1.5 w-1.5 rounded-full bg-[#F7931A]" />
