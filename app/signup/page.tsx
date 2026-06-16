@@ -9,6 +9,8 @@ import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { firebaseAuth, firebaseDb } from '@/lib/firebase';
 import Header from '@/components/organisms/Header';
 
+export const dynamic = 'force-dynamic'; // Ensures this page is dynamically rendered, avoiding prerendering issues with useSearchParams
+
 function PartyIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F7931A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
