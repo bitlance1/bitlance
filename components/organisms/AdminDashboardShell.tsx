@@ -12,9 +12,11 @@ import {
   LayoutDashboard,
   LogOut,
   MessageSquare,
+  Send,
   ShieldCheck,
   UploadCloud,
   Users,
+  XCircle,
 } from "lucide-react";
 import { firebaseAuth } from "@/lib/firebase";
 
@@ -28,6 +30,8 @@ const NAV_ITEMS = [
   { label: "Submissions", href: "/admin/dashboard/submissions", icon: UploadCloud },
   { label: "Escrow", href: "/admin/dashboard/escrow", icon: CircleDollarSign },
   { label: "Disputes", href: "/admin/dashboard/disputes", icon: AlertCircle },
+  { label: "Terminations", href: "/admin/dashboard/terminations", icon: XCircle },
+  { label: "Direct Outreach", href: "/admin/dashboard/outreach", icon: Send },
   { label: "Notifications", href: "/admin/dashboard/notifications", icon: Bell },
 ];
 

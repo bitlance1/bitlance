@@ -41,7 +41,7 @@ import {
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-type ContractStatus = "Active" | "Review" | "Completed";
+type ContractStatus = "Active" | "Review" | "Completed" | "Terminated";
 
 type Contract = {
   id: string;
@@ -92,6 +92,7 @@ type Contract = {
   createdAt?: any;
   updatedAt?: any;
   companyLogo?: string;
+  terminationStatus?: "none" | "pending_review" | "approved" | "rejected";
 };
 
 type SubmittedJob = {
@@ -549,6 +550,7 @@ export default function FreelancerContractsContent() {
               workStatus: normalizeWorkStatus(data), submissionMessage: data.submissionMessage ?? "", submissionLink: data.submissionLink ?? "",
               submissionAttachment: data.submissionAttachment ?? null, submissionReviewDueAt: data.submissionReviewDueAt, revisionMessage: data.revisionMessage ?? "",
               scopeItems: Array.isArray(data.scopeItems) ? data.scopeItems : [], milestones: Array.isArray(data.milestones) ? data.milestones : [],
+              terminationStatus: (data.terminationStatus as Contract["terminationStatus"]) ?? "none",
               createdAt: data.createdAt, updatedAt: data.updatedAt,
             };
           });
@@ -763,6 +765,16 @@ export default function FreelancerContractsContent() {
                               <p className="text-[12px] text-gray-400 mt-0.5 truncate">Client: {contract.clientName}</p>
                               <div className="mt-1.5 flex flex-wrap items-center gap-2">
                                 <StatusBadge label={statusLabel} />
+                                {contract.terminationStatus === "pending_review" && (
+                                  <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                                    <AlertCircle className="h-2.5 w-2.5" /> Termination Pending
+                                  </span>
+                                )}
+                                {contract.terminationStatus === "approved" && (
+                                  <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-700">
+                                    Terminated
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -809,6 +821,16 @@ export default function FreelancerContractsContent() {
                           </div>
                           <div className="border-l border-gray-100 px-4">
                             <StatusBadge label={statusLabel} />
+                            {contract.terminationStatus === "pending_review" && (
+                              <div className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                                <AlertCircle className="h-2.5 w-2.5" /> Termination Pending
+                              </div>
+                            )}
+                            {contract.terminationStatus === "approved" && (
+                              <div className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-700">
+                                Terminated
+                              </div>
+                            )}
                             {totalMs > 0 && <p className="mt-2 text-[10px] font-bold text-gray-700">Milestone {Math.min(releasedCount + 1, totalMs)} of {totalMs}</p>}
                             <p className="mt-0.5 text-[10px] text-gray-400">{statusLabel === "Finished" ? `Completed ${contract.dueDate}` : statusLabel === "Awaiting Review" ? "Submitted for review" : `Started ${contract.startDate}`}</p>
                           </div>

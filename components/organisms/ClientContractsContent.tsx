@@ -25,7 +25,7 @@ import {
   where,
 } from "firebase/firestore";
 
-type ContractStatus = "Active" | "Review" | "Completed";
+type ContractStatus = "Active" | "Review" | "Completed" | "Terminated";
 
 type Contract = {
   id: string;
@@ -77,6 +77,8 @@ type Contract = {
   createdAt?: any;
   updatedAt?: any;
   companyLogo?: string;
+  terminationStatus?: "none" | "pending_review" | "approved" | "rejected";
+  terminationRequestId?: string;
 };
 
 type SubmittedJob = {
@@ -377,6 +379,92 @@ export default function ClientContractsContent() {
   const [loadingFreelancer, setLoadingFreelancer] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
+  // ── Termination state ────────────────────────────────────────────────────
+  const [isTerminationModalOpen, setIsTerminationModalOpen] = useState(false);
+  const [terminationContract, setTerminationContract] = useState<Contract | null>(null);
+  const [terminationReason, setTerminationReason] = useState("");
+  const [terminationError, setTerminationError] = useState("");
+  const [isSubmittingTermination, setIsSubmittingTermination] = useState(false);
+
+  const openTermination = (contract: Contract) => {
+    setTerminationContract(contract);
+    setTerminationReason("");
+    setTerminationError("");
+    setIsTerminationModalOpen(true);
+  };
+
+  const handleSubmitTermination = async () => {
+    if (!terminationContract) return;
+    const reason = terminationReason.trim();
+    if (!reason) { setTerminationError("Please provide a reason for termination."); return; }
+    const user = firebaseAuth.currentUser;
+    if (!user) { setTerminationError("You must be logged in."); return; }
+    setIsSubmittingTermination(true);
+    setTerminationError("");
+    try {
+      const c = terminationContract;
+      const remainingEscrowSats = Math.max(0, (c.escrowFundedTotalSats ?? 0) - (c.escrowReleasedSats ?? 0));
+      // Fetch client Lightning address for refund
+      let clientLightningAddress = "";
+      try {
+        const clientSnap = await getDoc(doc(firebaseDb, "clients", user.uid));
+        if (clientSnap.exists()) {
+          const d = clientSnap.data() as any;
+          clientLightningAddress = d.lightningAddress || d.settings?.payment?.lightningAddress || "";
+        }
+      } catch { /* non-fatal */ }
+      // Fetch client name
+      let clientName = c.clientName || "";
+      if (!clientName) {
+        try {
+          const snap = await getDoc(doc(firebaseDb, "all_users", user.uid));
+          if (snap.exists()) clientName = (snap.data() as any).fullName || (snap.data() as any).name || "";
+        } catch { /* non-fatal */ }
+      }
+      const reqRef = await addDoc(collection(firebaseDb, "termination_requests"), {
+        contractId: c.id,
+        contractTitle: c.title,
+        clientId: c.clientId,
+        clientName: clientName || "Client",
+        clientLightningAddress,
+        freelancerId: c.freelancerId,
+        freelancerName: c.freelancer,
+        jobId: c.jobId || "",
+        reason,
+        remainingEscrowSats,
+        escrowFundedTotalSats: c.escrowFundedTotalSats ?? 0,
+        escrowReleasedSats: c.escrowReleasedSats ?? 0,
+        status: "pending",
+        adminNote: "",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      await setDoc(doc(firebaseDb, "contracts", c.id), {
+        terminationStatus: "pending_review",
+        terminationRequestId: reqRef.id,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+      // Notify freelancer
+      void sendUserNotification({
+        userId: c.freelancerId || "",
+        title: "Contract termination requested",
+        body: `The client has requested to terminate the contract "${c.title}". This is under admin review.`,
+        url: "/freelancer/dashboard/contracts",
+        tag: `termination-${c.id}`,
+      }).catch(console.error);
+      // Notify admin via generic notification — use a placeholder admin notification
+      // (Real admin push handled separately; this logs it for admin inbox)
+      setIsTerminationModalOpen(false);
+      setTerminationContract(null);
+      setTerminationReason("");
+    } catch (err) {
+      console.error("Termination request error:", err);
+      setTerminationError("Failed to submit termination request. Please try again.");
+    } finally {
+      setIsSubmittingTermination(false);
+    }
+  };
+
   const createConversationId = (jobId: string, freelancerId: string) => `${jobId}_${freelancerId}`;
   const freelancerNameCache = useRef<Record<string, string>>({});
   const companyLogoCache = useRef<Record<string, string>>({});
@@ -470,6 +558,8 @@ export default function ClientContractsContent() {
               revisionMessage: data.revisionMessage ?? "",
               scopeItems: Array.isArray(data.scopeItems) ? data.scopeItems : [],
               milestones: Array.isArray(data.milestones) ? data.milestones : [],
+              terminationStatus: (data.terminationStatus as Contract["terminationStatus"]) ?? "none",
+              terminationRequestId: data.terminationRequestId ?? "",
             };
           });
           (async () => {
@@ -961,6 +1051,16 @@ export default function ClientContractsContent() {
                               <p className="text-[12px] text-gray-400 mt-0.5 truncate">with {contract.freelancer}</p>
                               <div className="mt-1.5 flex flex-wrap items-center gap-2">
                                 <StatusBadge label={statusLabel} />
+                                {contract.terminationStatus === "pending_review" && (
+                                  <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                                    <Clock className="h-2.5 w-2.5" /> Termination Pending
+                                  </span>
+                                )}
+                                {contract.terminationStatus === "rejected" && (
+                                  <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-600">
+                                    Termination Rejected
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -1005,6 +1105,9 @@ export default function ClientContractsContent() {
                             </button>
                             <KebabDropdown>
                               <KebabMenuItem onSelect={() => openDispute(contract.id, contract.title)}>Raise Dispute</KebabMenuItem>
+                              {!isFinishedContract(contract) && contract.terminationStatus !== "pending_review" && contract.terminationStatus !== "approved" && (
+                                <KebabMenuItem onSelect={() => openTermination(contract)}>Request Termination</KebabMenuItem>
+                              )}
                             </KebabDropdown>
                           </div>
                         </div>
@@ -1022,6 +1125,16 @@ export default function ClientContractsContent() {
                             <StatusBadge label={statusLabel} />
                             {totalMs > 0 && <p className="mt-2 text-[10px] font-bold text-gray-700">Milestone {Math.min(releasedCount + 1, totalMs)} of {totalMs}</p>}
                             <p className="mt-0.5 text-[10px] text-gray-400">{statusLabel === "Completed" ? `Completed ${contract.dueDate}` : statusLabel === "Needs Review" ? "Submitted for review" : `Started ${contract.startDate}`}</p>
+                            {contract.terminationStatus === "pending_review" && (
+                              <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                                <Clock className="h-2.5 w-2.5" /> Termination Pending
+                              </div>
+                            )}
+                            {contract.terminationStatus === "rejected" && (
+                              <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-600">
+                                Termination Rejected
+                              </div>
+                            )}
                           </div>
                           <div className="border-l border-gray-100 px-4">
                             <CompactMilestoneList contract={contract} />
@@ -1058,6 +1171,9 @@ export default function ClientContractsContent() {
                             </button>
                             <KebabDropdown>
                               <KebabMenuItem onSelect={() => openDispute(contract.id, contract.title)}>Raise Dispute</KebabMenuItem>
+                              {!isFinishedContract(contract) && contract.terminationStatus !== "pending_review" && contract.terminationStatus !== "approved" && (
+                                <KebabMenuItem onSelect={() => openTermination(contract)}>Request Termination</KebabMenuItem>
+                              )}
                             </KebabDropdown>
                           </div>
                         </div>
@@ -1121,6 +1237,11 @@ export default function ClientContractsContent() {
                               <p className="text-[12px] text-gray-400 mt-0.5 truncate">with {contract.freelancer}</p>
                               <div className="mt-1.5 flex flex-wrap items-center gap-2">
                                 <StatusBadge label="In Progress" />
+                                {contract.terminationStatus === "pending_review" && (
+                                  <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                                    <Clock className="h-2.5 w-2.5" /> Termination Pending
+                                  </span>
+                                )}
                                 <span className="text-[10px] font-semibold text-gray-500">Started {contract.startDate}</span>
                               </div>
                             </div>
@@ -1147,6 +1268,9 @@ export default function ClientContractsContent() {
                             </button>
                             <KebabDropdown>
                               <KebabMenuItem onSelect={() => openDispute(contract.id, contract.title)}>Raise Dispute</KebabMenuItem>
+                              {contract.terminationStatus !== "pending_review" && contract.terminationStatus !== "approved" && (
+                                <KebabMenuItem onSelect={() => openTermination(contract)}>Request Termination</KebabMenuItem>
+                              )}
                             </KebabDropdown>
                           </div>
                         </div>
@@ -1160,6 +1284,11 @@ export default function ClientContractsContent() {
                               <p className="mt-0.5 truncate text-[11px] text-gray-400">Freelancer: {contract.freelancer}</p>
                               <div className="mt-3 flex flex-wrap items-center gap-3">
                                 <StatusBadge label="In Progress" />
+                                {contract.terminationStatus === "pending_review" && (
+                                  <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                                    <Clock className="h-2.5 w-2.5" /> Termination Pending
+                                  </span>
+                                )}
                                 <span className="text-[10px] font-semibold text-gray-500">Started {contract.startDate}</span>
                               </div>
                             </div>
@@ -1188,6 +1317,9 @@ export default function ClientContractsContent() {
                               </button>
                               <KebabDropdown>
                                 <KebabMenuItem onSelect={() => openDispute(contract.id, contract.title)}>Raise Dispute</KebabMenuItem>
+                                {contract.terminationStatus !== "pending_review" && contract.terminationStatus !== "approved" && (
+                                  <KebabMenuItem onSelect={() => openTermination(contract)}>Request Termination</KebabMenuItem>
+                                )}
                               </KebabDropdown>
                             </div>
                           </div>
@@ -1806,6 +1938,78 @@ export default function ClientContractsContent() {
           contractTitle={disputeContract.title}
           raisedBy="client"
         />
+      )}
+
+      {/* TERMINATION REQUEST MODAL */}
+      {isTerminationModalOpen && terminationContract && (
+        <div className="fixed inset-0 z-[110] flex items-end justify-center px-2 py-2 sm:items-center sm:px-4 sm:py-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => { if (!isSubmittingTermination) setIsTerminationModalOpen(false); }} />
+          <div className="relative z-[111] max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white shadow-2xl">
+            <div className="px-5 pt-5 pb-4 border-b border-gray-50">
+              <button type="button" onClick={() => setIsTerminationModalOpen(false)} disabled={isSubmittingTermination} className="absolute right-5 top-5 flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 text-lg">✕</button>
+              <div className="flex items-center gap-2 mb-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-red-50">
+                  <AlertCircle className="h-4 w-4 text-red-600" />
+                </div>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-red-600">Contract Termination</span>
+              </div>
+              <h2 className="text-[20px] font-black text-gray-900 leading-tight">Request to Terminate</h2>
+              <p className="mt-1.5 text-[13px] text-gray-500">
+                Your request will be reviewed by our admin team before any termination is processed. You will be notified of the outcome.
+              </p>
+            </div>
+            <div className="px-5 py-4 space-y-4">
+              {/* Contract summary */}
+              <div className="rounded-xl bg-gray-50 px-4 py-3 space-y-2 text-[13px]">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Contract Details</p>
+                {[
+                  { label: "Contract", value: terminationContract.title },
+                  { label: "Freelancer", value: terminationContract.freelancer },
+                  { label: "Budget", value: terminationContract.paymentTotalAmountSats ? `${terminationContract.paymentTotalAmountSats.toLocaleString()} sats` : terminationContract.budget },
+                  {
+                    label: "Remaining in Escrow",
+                    value: `${Math.max(0, (terminationContract.escrowFundedTotalSats ?? 0) - (terminationContract.escrowReleasedSats ?? 0)).toLocaleString()} sats`,
+                  },
+                ].map(({ label, value }) => (
+                  <div key={label} className="flex items-center justify-between gap-4">
+                    <span className="text-gray-500">{label}</span>
+                    <span className="font-semibold text-gray-900 text-right">{value}</span>
+                  </div>
+                ))}
+              </div>
+              {/* Reason */}
+              <div>
+                <label className="block text-[12px] font-bold text-gray-700 mb-1.5">Reason for termination <span className="text-red-500">*</span></label>
+                <textarea
+                  value={terminationReason}
+                  onChange={(e) => setTerminationReason(e.target.value)}
+                  rows={4}
+                  placeholder="Explain why you want to terminate this contract. The admin will review your request and contact both parties if needed."
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-[13px] text-gray-900 outline-none focus:ring-2 focus:ring-red-100 focus:border-red-300 resize-none"
+                />
+              </div>
+              {terminationError && (
+                <p className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[12px] text-red-700">{terminationError}</p>
+              )}
+              <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">
+                <p className="text-[12px] font-bold text-amber-700 mb-1">What happens next?</p>
+                <ul className="space-y-1 text-[11px] text-amber-600 list-disc list-inside">
+                  <li>Admin will review your request and may reach out to both parties</li>
+                  <li>If approved, any remaining escrow balance will be refunded to your Lightning address</li>
+                  <li>The contract will remain active until the admin approves the termination</li>
+                </ul>
+              </div>
+            </div>
+            <div className="px-5 pb-5 pt-2 flex items-center gap-3">
+              <button type="button" onClick={() => setIsTerminationModalOpen(false)} disabled={isSubmittingTermination} className="flex-1 rounded-xl border border-gray-200 bg-white py-3 text-[13px] font-bold text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
+              <button type="button" onClick={() => void handleSubmitTermination()} disabled={isSubmittingTermination} className="flex-1 rounded-xl bg-red-500 py-3 text-[13px] font-bold text-white hover:bg-red-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                {isSubmittingTermination ? (
+                  <><svg className="animate-spin h-3.5 w-3.5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Submitting…</>
+                ) : "Submit Request"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </section>
   );

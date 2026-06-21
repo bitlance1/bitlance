@@ -52,6 +52,43 @@ export type AdminContract = {
   paymentTotalAmountSats: number;
   escrowFundedTotalSats: number;
   escrowReleasedSats: number;
+  terminationStatus?: string;
+  terminationRequestId?: string;
+  createdAt?: FirestoreDate;
+  updatedAt?: FirestoreDate;
+};
+
+export type AdminTerminationRequest = {
+  id: string;
+  contractId: string;
+  contractTitle: string;
+  clientId: string;
+  clientName: string;
+  clientLightningAddress: string;
+  freelancerId: string;
+  freelancerName: string;
+  jobId: string;
+  reason: string;
+  remainingEscrowSats: number;
+  escrowFundedTotalSats: number;
+  escrowReleasedSats: number;
+  status: "pending" | "approved" | "rejected";
+  adminNote: string;
+  createdAt?: FirestoreDate;
+  updatedAt?: FirestoreDate;
+};
+
+export type AdminOutreachThread = {
+  id: string;
+  adminId: string;
+  recipientId: string;
+  recipientRole: string;
+  recipientName: string;
+  subject: string;
+  lastMessageText: string;
+  lastMessageAt?: FirestoreDate;
+  status: string;
+  unreadByRecipient: boolean;
   createdAt?: FirestoreDate;
   updatedAt?: FirestoreDate;
 };
@@ -165,6 +202,8 @@ export function useAdminDashboardData() {
   const [submissions, setSubmissions] = useState<AdminSubmission[]>([]);
   const [escrows, setEscrows] = useState<AdminEscrow[]>([]);
   const [tokens, setTokens] = useState<AdminNotificationToken[]>([]);
+  const [terminationRequests, setTerminationRequests] = useState<AdminTerminationRequest[]>([]);
+  const [outreachThreads, setOutreachThreads] = useState<AdminOutreachThread[]>([]);
   const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
@@ -242,6 +281,8 @@ export function useAdminDashboardData() {
               paymentTotalAmountSats: Number(data.paymentTotalAmountSats ?? parseSats(data.budget)),
               escrowFundedTotalSats: Number(data.escrowFundedTotalSats ?? data.paymentPaidAmountSats ?? 0),
               escrowReleasedSats: Number(data.escrowReleasedSats ?? 0),
+              terminationStatus: normalize(data.terminationStatus, "none"),
+              terminationRequestId: normalize(data.terminationRequestId, ""),
               createdAt: data.createdAt as FirestoreDate,
               updatedAt: data.updatedAt as FirestoreDate,
             };
@@ -315,6 +356,55 @@ export function useAdminDashboardData() {
           })
         );
       }),
+      onSnapshot(query(collection(firebaseDb, "termination_requests"), limit(250)), (snapshot) => {
+        setTerminationRequests(
+          snapshot.docs.map((docSnap) => {
+            const data = docSnap.data() as Record<string, unknown>;
+            const rawStatus = normalize(data.status, "pending");
+            const status = rawStatus === "approved" ? "approved" : rawStatus === "rejected" ? "rejected" : "pending";
+            return {
+              id: docSnap.id,
+              contractId: normalize(data.contractId),
+              contractTitle: normalize(data.contractTitle, "Untitled contract"),
+              clientId: normalize(data.clientId),
+              clientName: normalize(data.clientName, "Client"),
+              clientLightningAddress: normalize(data.clientLightningAddress),
+              freelancerId: normalize(data.freelancerId),
+              freelancerName: normalize(data.freelancerName, "Freelancer"),
+              jobId: normalize(data.jobId),
+              reason: normalize(data.reason),
+              remainingEscrowSats: Number(data.remainingEscrowSats ?? 0),
+              escrowFundedTotalSats: Number(data.escrowFundedTotalSats ?? 0),
+              escrowReleasedSats: Number(data.escrowReleasedSats ?? 0),
+              status,
+              adminNote: normalize(data.adminNote),
+              createdAt: data.createdAt as FirestoreDate,
+              updatedAt: data.updatedAt as FirestoreDate,
+            };
+          })
+        );
+      }),
+      onSnapshot(query(collection(firebaseDb, "admin_outreach"), limit(250)), (snapshot) => {
+        setOutreachThreads(
+          snapshot.docs.map((docSnap) => {
+            const data = docSnap.data() as Record<string, unknown>;
+            return {
+              id: docSnap.id,
+              adminId: normalize(data.adminId),
+              recipientId: normalize(data.recipientId),
+              recipientRole: normalize(data.recipientRole, "user"),
+              recipientName: normalize(data.recipientName, "User"),
+              subject: normalize(data.subject, "No subject"),
+              lastMessageText: normalize(data.lastMessageText),
+              lastMessageAt: data.lastMessageAt as FirestoreDate,
+              status: normalize(data.status, "open"),
+              unreadByRecipient: Boolean(data.unreadByRecipient),
+              createdAt: data.createdAt as FirestoreDate,
+              updatedAt: data.updatedAt as FirestoreDate,
+            };
+          })
+        );
+      }),
     ];
 
     return () => unsubs.forEach((unsubscribe) => unsubscribe());
@@ -346,8 +436,9 @@ export function useAdminDashboardData() {
       releasedEscrow,
       notificationDevices: tokens.length,
       conversations: conversations.length,
+      pendingTerminations: terminationRequests.filter((r) => r.status === "pending").length,
     };
-  }, [users, jobs, proposals, contracts, submissions, tokens.length, conversations.length]);
+  }, [users, jobs, proposals, contracts, submissions, tokens.length, conversations.length, terminationRequests]);
 
   const activity = useMemo<AdminActivityItem[]>(() => {
     const items: AdminActivityItem[] = [
@@ -404,6 +495,8 @@ export function useAdminDashboardData() {
     submissions,
     escrows,
     tokens,
+    terminationRequests,
+    outreachThreads,
     summary,
     activity,
     loadError,
