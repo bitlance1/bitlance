@@ -666,6 +666,7 @@ export default function ClientJobPostsContent() {
                       ]);
                       const conversationId = createConversationId(selectedJob.id, proposal.freelancerId);
                       const paymentTotalAmountSats = parseSats(selectedJob.budget);
+                      const proposedRate = parseSats(proposal.rate);
                       await setDoc(
                         doc(firebaseDb, "conversations", conversationId),
                         {
@@ -679,6 +680,7 @@ export default function ClientJobPostsContent() {
                           clientAvatarUrl: clientIdentity.avatarUrl,
                           freelancerAvatarUrl: freelancerIdentity.avatarUrl,
                           paymentTotalAmountSats,
+                          proposedRate,
                           createdBy: "client",
                           canFreelancerMessage: true,
                           unread: {
@@ -715,6 +717,7 @@ export default function ClientJobPostsContent() {
                   const freelancerNames = selected.map((p) => p.name);
                   const clientId = firebaseAuth.currentUser?.uid ?? "";
                   const paymentTotalAmountSats = parseSats(selectedJob.budget);
+                  // each proposal carries its own proposed rate
                   const clientIdentity = clientId
                     ? await resolveClientIdentity(clientId)
                     : { name: "Client", avatarUrl: "" };
@@ -730,6 +733,7 @@ export default function ClientJobPostsContent() {
                   selected.forEach((proposal) => {
                     const proposalRef = doc(firebaseDb, "proposals", proposal.id);
                     batch.update(proposalRef, { status: "accepted", updatedAt: serverTimestamp() });
+                    const proposedRate = parseSats(proposal.rate);
 
                     const contractId = `${selectedJob.id}_${proposal.freelancerId}`;
                     const contractRef = doc(firebaseDb, "contracts", contractId);
@@ -745,6 +749,7 @@ export default function ClientJobPostsContent() {
                         status: "Active",
                         budget: selectedJob.budget,
                         paymentTotalAmountSats,
+                        proposedRate,
                         progress: 0,
                         nextMilestone: "Kickoff & onboarding",
                         startDate: serverTimestamp(),
@@ -773,6 +778,7 @@ export default function ClientJobPostsContent() {
                         freelancerAvatarUrl:
                           freelancerIdentityMap.get(proposal.freelancerId)?.avatarUrl ?? "",
                         paymentTotalAmountSats,
+                        proposedRate,
                         createdBy: "system",
                         canFreelancerMessage: true,
                         unread: {

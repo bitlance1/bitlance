@@ -125,6 +125,7 @@ type Conversation = {
   paymentStatus?: "unfunded" | "invoice_created" | "funded" | "released" | "disputed" | "expired";
   paymentAmountSats?: number;
   paymentTotalAmountSats?: number;
+  proposedRate?: number;
   paymentInstallments?: number;
   paymentCurrentInstallment?: number;
   paymentPaidAmountSats?: number;
@@ -430,6 +431,7 @@ export default function ClientMessagesPage() {
               paymentStatus: normalizedPaymentStatus,
               paymentAmountSats: Number(data.paymentAmountSats ?? 0),
               paymentTotalAmountSats: Number(data.paymentTotalAmountSats ?? 0),
+              proposedRate: Number(data.proposedRate ?? 0),
               paymentInstallments: Number(data.paymentInstallments ?? 0),
               paymentCurrentInstallment: Number(data.paymentCurrentInstallment ?? 0),
               paymentPaidAmountSats: isFundedRecord ? Number(data.paymentPaidAmountSats ?? 0) : 0,
@@ -549,6 +551,55 @@ export default function ClientMessagesPage() {
       updatedAt: serverTimestamp(),
     }).catch(() => undefined);
   }, [selectedChat, currentUserId]);
+
+  // ── Auto-verify invoice on chat open / page refresh ─────────────────────
+  // If there's a pending invoice_created status when the chat loads, silently
+  // check Blink right away. If it's expired, mark it expired in Firestore so
+  // the client sees "Generate Fresh Invoice" instead of a dead QR code.
+  useEffect(() => {
+    if (!selectedConversation || !currentUserId) return;
+    if (selectedConversation.paymentStatus !== "invoice_created") return;
+    const paymentRequest = selectedConversation.paymentRequest;
+    if (!paymentRequest) return;
+
+    const contractId = getContractId(selectedConversation);
+
+    const checkOnLoad = async () => {
+      try {
+        const res = await fetch("/api/check-invoice", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ paymentRequest }),
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const status = data?.data?.lnInvoicePaymentStatusByPaymentRequest?.status;
+
+        if (status === "EXPIRED") {
+          // Mark expired in Firestore so the UI shows "Generate Fresh Invoice"
+          await Promise.all([
+            updateDoc(doc(firebaseDb, "conversations", selectedConversation.id), {
+              paymentStatus: "expired",
+              updatedAt: serverTimestamp(),
+            }),
+            setDoc(doc(firebaseDb, "contracts", contractId), {
+              paymentStatus: "expired",
+              updatedAt: serverTimestamp(),
+            }, { merge: true }),
+          ]);
+        } else if (status === "PAID") {
+          // Invoice was paid while the page was closed — trigger full verify
+          void handleVerifyPayment(paymentRequest);
+        }
+        // status === "PENDING" — invoice still alive, do nothing, show QR
+      } catch {
+        // non-fatal — invoice UI stays as-is
+      }
+    };
+
+    void checkOnLoad();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedConversation?.id, selectedConversation?.paymentStatus, selectedConversation?.paymentRequest]);
 
   const messageList = useMemo<MessageListItem[]>(() => {
     if (!currentUserId) return [];
@@ -905,10 +956,12 @@ export default function ClientMessagesPage() {
     installments = 1,
     fundingMode = "full",
     milestoneTitles = [],
+    chosenAmount,
   }: {
     installments: number;
     fundingMode: FundingMode;
     milestoneTitles: string[];
+    chosenAmount?: number;
   }) => {
     if (!selectedConversation || !currentUserId) return;
 
@@ -956,25 +1009,37 @@ export default function ClientMessagesPage() {
     const fundedAmount = normalizeFundedAmount(existingFundingData);
     const releasedAmount = normalizeReleasedAmount(existingFundingData);
     const totalAmount =
-      selectedConversation.paymentTotalAmountSats ||
-      Number(contractData.paymentTotalAmountSats ?? 0) ||
-      parseSats(contractData.budget) ||
-      parseSats(contractData.amount) ||
-      selectedConversation.paymentAmountSats ||
-      0;
-    const paymentInstallments = selectedConversation.paymentInstallments || Number(contractData.paymentInstallments ?? 0) || clampInstallments(installments);
+      chosenAmount && chosenAmount > 0
+        ? chosenAmount
+        : selectedConversation.paymentTotalAmountSats ||
+          Number(contractData.paymentTotalAmountSats ?? 0) ||
+          parseSats(contractData.budget) ||
+          parseSats(contractData.amount) ||
+          selectedConversation.paymentAmountSats ||
+          0;
+    // Always use the freshly chosen installment count from the UI when no
+    // milestones have been funded yet. Only lock to the stored value once
+    // at least one milestone has been funded (mid-contract).
+    const hasFundedAny = fundedAmount > 0;
+    const paymentInstallments = hasFundedAny
+      ? (selectedConversation.paymentInstallments || Number(contractData.paymentInstallments ?? 0) || clampInstallments(installments))
+      : clampInstallments(installments);
     const platformFeeSats = Math.ceil(totalAmount * (PLATFORM_FEE_PERCENT / 100));
     const totalClientPayable = totalAmount + platformFeeSats;
     if (fundedAmount >= totalClientPayable && totalClientPayable > 0) {
       throw new Error("Escrow is already fully funded. No new invoice can be created for this contract.");
     }
-    const existingMilestones = escrowSnap.exists() && Array.isArray(escrowData.milestones) && escrowData.milestones.length
-      ? escrowData.milestones
-      : Array.isArray(contractData.milestones) && contractData.milestones.length
-        ? normalizeMilestones(contractData.milestones, false)
-        : Array.isArray(selectedConversation.milestones) && selectedConversation.milestones.length
-          ? normalizeMilestones(selectedConversation.milestones, false)
-          : buildMilestones(totalAmount, totalClientPayable, paymentInstallments, milestoneTitles);
+    // If no milestones have been funded yet, always rebuild from the UI choices
+    // so the milestone count + titles match what the client just selected.
+    const existingMilestones = hasFundedAny
+      ? (escrowSnap.exists() && Array.isArray(escrowData.milestones) && escrowData.milestones.length
+          ? escrowData.milestones
+          : Array.isArray(contractData.milestones) && contractData.milestones.length
+            ? normalizeMilestones(contractData.milestones, false)
+            : Array.isArray(selectedConversation.milestones) && selectedConversation.milestones.length
+              ? normalizeMilestones(selectedConversation.milestones, false)
+              : buildMilestones(totalAmount, totalClientPayable, paymentInstallments, milestoneTitles))
+      : buildMilestones(totalAmount, totalClientPayable, paymentInstallments, milestoneTitles);
     const milestones = existingMilestones.map((milestone: any, index: number) => ({
       index: Number(milestone.index ?? index + 1),
       title: milestone.title || milestoneTitles[index] || `Milestone ${index + 1}`,
@@ -1335,6 +1400,7 @@ export default function ClientMessagesPage() {
                     paymentStatus={selectedConversation.paymentStatus}
                     paymentAmountSats={selectedConversation.paymentAmountSats}
                     paymentTotalAmountSats={selectedConversation.paymentTotalAmountSats}
+                    proposedRate={selectedConversation.proposedRate}
                     paymentInstallments={selectedConversation.paymentInstallments}
                     paymentCurrentInstallment={selectedConversation.paymentCurrentInstallment}
                     paymentPaidAmountSats={selectedConversation.paymentPaidAmountSats}

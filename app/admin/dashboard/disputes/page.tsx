@@ -145,7 +145,18 @@ export default function AdminDisputesPage() {
                 <div className="text-gray-600 font-medium" key="job">{d.jobTitle}</div>,
                 <div className="text-gray-600 font-medium" key="client">{d.clientName}</div>,
                 <div className="text-gray-600 font-medium" key="freelancer">{d.freelancerName}</div>,
-                <div key="by" className="capitalize text-gray-600">{d.raisedBy}</div>,
+                <div key="by" className="flex items-center gap-2 flex-wrap">
+                  <span className="font-black text-[#1a1a1a] text-sm">
+                    {d.raisedBy === 'client' ? d.clientName : d.freelancerName}
+                  </span>
+                  <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] ${
+                    d.raisedBy === 'client'
+                      ? 'border-blue-100 bg-blue-50 text-blue-700'
+                      : 'border-emerald-100 bg-emerald-50 text-emerald-700'
+                  }`}>
+                    {d.raisedBy}
+                  </span>
+                </div>,
                 <div key="title" className="font-medium text-gray-700">{d.title}</div>,
                 <StatusPill key="status" status={d.status} />, 
                 <div key="created" className="text-xs text-gray-500">{formatDateTime(d.createdAt?.toDate?.() || d.createdAt)}</div>,

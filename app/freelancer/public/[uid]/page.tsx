@@ -10,7 +10,7 @@ import { useParams, useRouter } from "next/navigation";
 import { MapPin, Calendar, BadgeCheck, ArrowLeft } from "lucide-react";
 import { useEffect, useState } from "react";
 import { firebaseDb } from "@/lib/firebase";
-import { doc, getDoc, collection, query, where, onSnapshot } from "firebase/firestore";
+import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
 
 export default function FreelancerPublicProfilePage() {
   const params = useParams<{ uid: string }>();
@@ -53,6 +53,7 @@ export default function FreelancerPublicProfilePage() {
       description: string;
       imageUrl?: string;
       imagePublicId?: string;
+      projectLink?: string;
     }>,
   });
 
@@ -60,10 +61,9 @@ export default function FreelancerPublicProfilePage() {
   useEffect(() => {
     if (!uid) { setNotFound(true); setLoading(false); return; }
 
-    let unsubscribeContracts: (() => void) | null = null;
-
     const load = async () => {
       try {
+        // ── Step 1: Fetch both Firestore docs in parallel ────────────────────
         const [allSnap, freeSnap] = await Promise.all([
           getDoc(doc(firebaseDb, "all_users", uid)),
           getDoc(doc(firebaseDb, "freelancers", uid)),
@@ -78,7 +78,7 @@ export default function FreelancerPublicProfilePage() {
         const a = allSnap.exists() ? (allSnap.data() as Record<string, any>) : {};
         const f = freeSnap.exists() ? (freeSnap.data() as Record<string, any>) : {};
 
-        // Member since
+        // ── Member since ─────────────────────────────────────────────────────
         const createdAtRaw = a.createdAt ?? f.createdAt ?? null;
         let memberSince = "";
         if (createdAtRaw) {
@@ -86,13 +86,12 @@ export default function FreelancerPublicProfilePage() {
           memberSince = d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
         }
 
-        // Name
+        // ── Name — mirrors dashboard exactly ─────────────────────────────────
         const firstName = (f.firstName as string) || (a.firstName as string) || "";
         const lastName  = (f.lastName  as string) || (a.lastName  as string) || "";
 
-        // Set static profile fields first
-        setProfile((prev) => ({
-          ...prev,
+        // ── Build the base profile — field-for-field match of dashboard ──────
+        const baseProfile = {
           firstName,
           lastName,
           title:           (f.title           as string) ?? "",
@@ -101,71 +100,89 @@ export default function FreelancerPublicProfilePage() {
           avatarUrl:       (f.avatarUrl        as string) ?? (a.avatarUrl as string) ?? "",
           verified:        (f.verified         as boolean) ?? false,
           hourlyRate:      (f.hourlyRate        as string) ?? "",
+          totalEarned:     "",   // computed from contracts below
+          jobSuccess:      0,    // computed from contracts below
+          jobsCompleted:   0,    // computed from contracts below
           responseTime:    (f.responseTime      as string) ?? "",
           availability:    (f.availability      as string) ?? "",
           lastActive:      (f.lastActive        as string) ?? "",
           bio:             (f.bio               as string) ?? "",
           skills:          Array.isArray(f.skills)          ? f.skills          : [],
           performanceData: Array.isArray(f.performanceData) ? f.performanceData : [],
+          workHistory:     Array.isArray(f.workHistory)     ? f.workHistory     : [],
           portfolioItems:  Array.isArray(f.portfolioItems)  ? f.portfolioItems  : [],
-        }));
-
-        // ── Real-time contracts listener ──────────────────────────────
-        const parseSatsValue = (value: unknown): number => {
-          if (typeof value === "number") return value;
-          const cleaned = String(value ?? "").replace(/[^0-9]/g, "");
-          return cleaned ? Number(cleaned) : 0;
         };
 
-        const formatContractDate = (value: any): string => {
-          if (!value) return "";
-          const d = typeof value.toDate === "function" ? value.toDate() : new Date(value);
-          if (isNaN(d.getTime())) return "";
-          return d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
-        };
+        setProfile((prev) => ({ ...prev, ...baseProfile }));
 
-        const isFinished = (data: any) =>
-          data.status === "Completed" ||
-          data.paymentStatus === "released" ||
-          data.workStatus === "approved" ||
-          data.workStatus === "completed";
+        // ── Step 2: Fetch contracts — same as dashboard (getDocs, not onSnapshot)
+        try {
+          const contractsSnap = await getDocs(
+            query(collection(firebaseDb, "contracts"), where("freelancerId", "==", uid))
+          );
 
-        const isOngoing = (data: any) =>
-          !isFinished(data) &&
-          (data.paymentStatus === "funded" ||
-            Number(data.escrowFundedTotalSats ?? 0) > 0 ||
-            data.workStatus === "in_progress" ||
-            data.workStatus === "submitted" ||
-            data.workStatus === "changes_requested");
+          const formatContractDate = (value: any): string => {
+            if (!value) return "";
+            const d = typeof value.toDate === "function" ? value.toDate() : new Date(value);
+            if (isNaN(d.getTime())) return "";
+            return d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+          };
 
-        unsubscribeContracts = onSnapshot(
-          query(collection(firebaseDb, "contracts"), where("freelancerId", "==", uid)),
-          (snapshot) => {
-            let computedTotalEarned = 0;
-            let computedJobsCompleted = 0;
-            const totalContracts = snapshot.docs.length;
+          const parseSatsValue = (value: unknown): number => {
+            if (typeof value === "number") return value;
+            const cleaned = String(value ?? "").replace(/[^0-9]/g, "");
+            return cleaned ? Number(cleaned) : 0;
+          };
 
-            const workHistoryFromContracts = snapshot.docs.map((d) => {
+          const isFinished = (data: any) =>
+            data.status === "Completed" ||
+            data.paymentStatus === "released" ||
+            data.workStatus === "approved" ||
+            data.workStatus === "completed";
+
+          const isOngoing = (data: any) =>
+            !isFinished(data) &&
+            (data.paymentStatus === "funded" ||
+              Number(data.escrowFundedTotalSats ?? 0) > 0 ||
+              data.workStatus === "in_progress" ||
+              data.workStatus === "submitted" ||
+              data.workStatus === "changes_requested");
+
+          // ── Earnings + completed count ────────────────────────────────────
+          let computedTotalEarned = 0;
+          let computedJobsCompleted = 0;
+          const totalContracts = contractsSnap.docs.length;
+
+          contractsSnap.docs.forEach((d) => {
+            const data = d.data() as any;
+            if (isFinished(data)) computedJobsCompleted += 1;
+
+            const milestones = Array.isArray(data.milestones) ? data.milestones : [];
+            if (milestones.length > 0) {
+              milestones.forEach((ms: any) => {
+                if (ms.status === "released") {
+                  computedTotalEarned += Number(ms.freelancerAmountSats ?? ms.releasedSats ?? 0);
+                }
+              });
+            } else {
+              computedTotalEarned += Number(
+                data.escrowReleasedSats ??
+                data.totalReleasedToFreelancerSats ??
+                data.paymentPaidAmountSats ??
+                0
+              );
+            }
+          });
+
+          const computedJobSuccess =
+            totalContracts > 0
+              ? Math.round((computedJobsCompleted / totalContracts) * 100)
+              : 0;
+
+          // ── Work history ──────────────────────────────────────────────────
+          const workHistoryFromContracts = contractsSnap.docs
+            .map((d) => {
               const data = d.data() as any;
-
-              if (isFinished(data)) computedJobsCompleted += 1;
-
-              const milestones = Array.isArray(data.milestones) ? data.milestones : [];
-              if (milestones.length > 0) {
-                milestones.forEach((ms: any) => {
-                  if (ms.status === "released") {
-                    computedTotalEarned += Number(ms.freelancerAmountSats ?? ms.releasedSats ?? 0);
-                  }
-                });
-              } else {
-                computedTotalEarned += Number(
-                  data.escrowReleasedSats ??
-                  data.totalReleasedToFreelancerSats ??
-                  data.paymentPaidAmountSats ??
-                  0
-                );
-              }
-
               const amountSats =
                 typeof data.paymentTotalAmountSats === "number"
                   ? data.paymentTotalAmountSats
@@ -175,44 +192,39 @@ export default function FreelancerPublicProfilePage() {
               const endStr = formatContractDate(data.dueDate ?? data.updatedAt);
               const period = startStr && endStr ? `${startStr} – ${endStr}` : startStr || endStr || "";
               const statusLabel = isFinished(data) ? "COMPLETED" : isOngoing(data) ? "ONGOING" : "ACTIVE";
-
               return {
                 title: data.title ?? "Contract",
                 amount: amountLabel,
                 status: statusLabel,
                 rating: typeof data.rating === "number" ? data.rating : 5,
-                review: data.clientReview ?? data.review ?? "",
+                review: (data.clientReview ?? data.review ?? "") as string,
                 period,
               };
-            }).sort((a) => (a.status === "COMPLETED" ? -1 : 1));
+            })
+            .sort((a, b) => {
+              const order: Record<string, number> = { COMPLETED: 0, ONGOING: 1, ACTIVE: 2 };
+              return (order[a.status] ?? 3) - (order[b.status] ?? 3);
+            });
 
-            const computedJobSuccess =
-              totalContracts > 0
-                ? Math.round((computedJobsCompleted / totalContracts) * 100)
-                : 0;
-
-            setProfile((prev) => ({
-              ...prev,
-              workHistory: workHistoryFromContracts,
-              totalEarned: computedTotalEarned.toLocaleString(),
-              jobsCompleted: computedJobsCompleted,
-              jobSuccess: computedJobSuccess,
-            }));
-
-            setLoading(false);
-          },
-          () => { setLoading(false); }
-        );
+          setProfile((prev) => ({
+            ...prev,
+            workHistory: workHistoryFromContracts,
+            totalEarned: computedTotalEarned.toLocaleString(),
+            jobsCompleted: computedJobsCompleted,
+            jobSuccess: computedJobSuccess,
+          }));
+        } catch (err) {
+          console.error("Failed to load work history from contracts:", err);
+        }
       } catch (err) {
         console.error("Failed to load public profile:", err);
         setNotFound(true);
+      } finally {
         setLoading(false);
       }
     };
 
     load();
-
-    return () => { unsubscribeContracts?.(); };
   }, [uid]);
 
   // ── derived ────────────────────────────────────────────────────────────────
@@ -562,21 +574,39 @@ export default function FreelancerPublicProfilePage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {profile.portfolioItems.length > 0 ? profile.portfolioItems.map((item) => (
-                <div key={item.id} className="aspect-[16/10] rounded-[10px] overflow-hidden bg-[#1a1a1a] relative group">
-                  {item.imageUrl ? (
-                    <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-90" />
-                  ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-[#1a1a1a] to-[#2d1a00] flex items-center justify-center">
-                      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="rgba(247,147,26,0.4)" strokeWidth="1">
-                        <rect x="3" y="3" width="18" height="18" rx="2" />
-                        <circle cx="8.5" cy="8.5" r="1.5" />
-                        <polyline points="21 15 16 10 5 21" />
-                      </svg>
-                    </div>
-                  )}
-                  {item.title && (
-                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent px-3 py-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <p className="text-white text-[12px] font-semibold">{item.title}</p>
+                <div key={item.id} className="rounded-[10px] overflow-hidden bg-[#1a1a1a] relative group">
+                  <div className="aspect-[16/10]">
+                    {item.imageUrl ? (
+                      <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-90" />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-[#1a1a1a] to-[#2d1a00] flex items-center justify-center">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="rgba(247,147,26,0.4)" strokeWidth="1">
+                          <rect x="3" y="3" width="18" height="18" rx="2" />
+                          <circle cx="8.5" cy="8.5" r="1.5" />
+                          <polyline points="21 15 16 10 5 21" />
+                        </svg>
+                      </div>
+                    )}
+                    {(item.title || item.projectLink) && (
+                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {item.title && <p className="text-white text-[12px] font-semibold leading-snug">{item.title}</p>}
+                        {item.projectLink && (
+                          <a
+                            href={item.projectLink}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                            onClick={(e) => e.stopPropagation()}
+                            className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold text-[#F7931A] hover:text-orange-300 transition-colors"
+                          >
+                            View Project →
+                          </a>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {item.description && (
+                    <div className="px-3 py-2 bg-[#111]">
+                      <p className="text-[11px] text-[#999] leading-relaxed line-clamp-2">{item.description}</p>
                     </div>
                   )}
                 </div>

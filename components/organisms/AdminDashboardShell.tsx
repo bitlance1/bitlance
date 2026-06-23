@@ -47,7 +47,7 @@ export default function AdminDashboardShell({ children }: { children: React.Reac
   return (
     <div className="min-h-screen bg-[#F7F6F3] text-[#1a1a1a]">
       <div className="flex">
-        <aside className="fixed left-0 top-0 z-40 hidden h-screen w-[280px] flex-col border-r border-[#E7E1D8] bg-white px-4 py-5 shadow-sm lg:flex">
+        <aside className="fixed left-0 top-0 z-40 hidden h-screen w-[280px] flex-col border-r border-[#E7E1D8] bg-white px-4 py-5 shadow-sm lg:flex overflow-y-auto">
           <Link href="/admin/dashboard" className="flex items-center gap-3 px-2">
             <div className="flex h-11 w-11 items-center justify-center rounded-[8px] bg-[#1a1a1a] text-white">
               <ShieldCheck className="h-5 w-5" />

@@ -196,8 +196,10 @@ async function sendEmail(
 </body>
 </html>`;
 
+  const fromAddress = process.env.RESEND_FROM_EMAIL ?? "Bitlance <onboarding@resend.dev>";
+
   const { error } = await new Resend(process.env.RESEND_API_KEY).emails.send({
-    from: "Bitlance <onboarding@resend.dev>",
+    from: fromAddress,
     to: toEmail,
     subject: payload.title,
     html,

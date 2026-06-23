@@ -276,6 +276,7 @@ export default function ClientProposalsContent() {
     try {
       const freelancerIdentity = await resolveFreelancerIdentity(proposal.freelancerId, proposal.freelancerName);
       const paymentTotalAmountSats = parseSats(job.budget);
+      const proposedRate = parseSats(proposal.rate);
       const contractId = `${job.id}_${proposal.freelancerId}`;
       const conversationId = createConversationId(job.id, proposal.freelancerId);
       const batch = writeBatch(firebaseDb);
@@ -285,7 +286,7 @@ export default function ClientProposalsContent() {
         proposalId: proposal.id,
         freelancerName: freelancerIdentity.name, title: job.title, description: job.description,
         status: "Active", budget: job.budget, contractType: job.jobType || "Fixed Price",
-        paymentTotalAmountSats, progress: 0,
+        paymentTotalAmountSats, proposedRate, progress: 0,
         nextMilestone: "Kickoff & onboarding", unreadByClient: false, unreadByFreelancer: true,
         createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
       }, { merge: true });
@@ -294,7 +295,7 @@ export default function ClientProposalsContent() {
         clientId: user.uid, clientName: clientIdentity.current.name,
         freelancerId: proposal.freelancerId, freelancerName: freelancerIdentity.name,
         clientAvatarUrl: clientIdentity.current.avatarUrl, freelancerAvatarUrl: freelancerIdentity.avatarUrl,
-        paymentTotalAmountSats, createdBy: "system",
+        paymentTotalAmountSats, proposedRate, createdBy: "system",
         canFreelancerMessage: true,
         unread: { [user.uid]: 0, [proposal.freelancerId]: 1 },
         updatedAt: serverTimestamp(), createdAt: serverTimestamp(),

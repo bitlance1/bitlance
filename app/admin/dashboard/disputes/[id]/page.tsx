@@ -4,8 +4,8 @@ import { doc, getDoc, getDocs, updateDoc, serverTimestamp, collection, query, or
 import { firebaseDb } from '@/lib/firebase';
 import { AdminPageHeader, Metric, StatusPill, DetailGrid, Panel, AdminBackLink } from '@/components/organisms/AdminDashboardParts';
 import { formatDateTime } from '@/lib/admin-dashboard';
-import { AlertCircle, ExternalLink, Paperclip } from 'lucide-react';
-import { useParams } from 'next/navigation';
+import { AlertCircle, ExternalLink, MessageSquare, Paperclip, User } from 'lucide-react';
+import { useParams, useRouter } from 'next/navigation';
 
 interface Dispute {
   id: string;
@@ -34,6 +34,15 @@ interface DisputeDetails {
 export default function AdminDisputeDetail() {
   const params = useParams<{ id: string }>();
   const id = params?.id ?? '';
+  const router = useRouter();
+
+  const openOutreach = (role: 'client' | 'freelancer') => {
+    const userId = role === 'client' ? details.clientId : details.freelancerId;
+    const name = role === 'client' ? details.clientName : details.freelancerName;
+    router.push(
+      `/admin/dashboard/outreach/new?recipientId=${userId}&recipientRole=${role}&recipientName=${encodeURIComponent(name)}&subject=${encodeURIComponent(`Re: Dispute — ${dispute?.title ?? details.contractTitle}`)}`
+    );
+  };
   const [dispute, setDispute] = useState<Dispute | null>(null);
   const [details, setDetails] = useState<DisputeDetails>({
     contractTitle: 'Loading…',
@@ -243,7 +252,7 @@ const filtered = allSubs.filter(
       <AdminPageHeader
         eyebrow="Dispute Detail"
         title={dispute.title}
-        description={`Raised by ${dispute.raisedBy} for job post: "${details.jobTitle}" (Contract: "${details.contractTitle}")`}
+        description={`Raised by ${dispute.raisedBy === 'client' ? details.clientName : details.freelancerName} (${dispute.raisedBy}) · Job: "${details.jobTitle}" · Contract: "${details.contractTitle}"`}
       />
 
       <section className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -263,6 +272,23 @@ const filtered = allSubs.filter(
         <h2 className="text-lg font-bold text-gray-900 mb-3">Associations</h2>
         <DetailGrid
           items={[
+            {
+              label: 'Raised By',
+              value: (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-black text-[#1a1a1a]">
+                    {dispute.raisedBy === 'client' ? details.clientName : details.freelancerName}
+                  </span>
+                  <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10px] font-black uppercase tracking-[0.08em] ${
+                    dispute.raisedBy === 'client'
+                      ? 'border-blue-100 bg-blue-50 text-blue-700'
+                      : 'border-emerald-100 bg-emerald-50 text-emerald-700'
+                  }`}>
+                    {dispute.raisedBy}
+                  </span>
+                </div>
+              ),
+            },
             {
               label: 'Contract',
               value: (
@@ -287,8 +313,44 @@ const filtered = allSubs.filter(
         />
       </section>
 
-      <section className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Left column: Evidence Description & Resolution Controls */}
+      {/* Reach out panel */}
+      <section className="mt-6 rounded-[8px] border border-[#E7E1D8] bg-white p-5 shadow-sm">
+        <h2 className="text-lg font-black text-[#1a1a1a]">Reach Out</h2>
+        <p className="mt-1 text-xs text-[#6b6762]">
+          Send a direct message to the client or freelancer regarding this dispute. They will receive a notification and can reply from their Admin Inbox.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={() => openOutreach('client')}
+            disabled={!details.clientId}
+            className="flex items-center gap-2 rounded-[8px] border border-[#E7E1D8] bg-white px-4 py-2.5 text-sm font-black text-[#1a1a1a] hover:bg-[#FFF4E6] hover:border-[#F7931A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <User className="h-4 w-4 text-[#8C4F00]" />
+            Message Client
+            {details.clientName && details.clientName !== 'Loading…' && (
+              <span className="ml-1 text-[11px] font-semibold text-[#6b6762]">({details.clientName})</span>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => openOutreach('freelancer')}
+            disabled={!details.freelancerId}
+            className="flex items-center gap-2 rounded-[8px] border border-[#E7E1D8] bg-white px-4 py-2.5 text-sm font-black text-[#1a1a1a] hover:bg-[#FFF4E6] hover:border-[#F7931A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <MessageSquare className="h-4 w-4 text-[#8C4F00]" />
+            Message Freelancer
+            {details.freelancerName && details.freelancerName !== 'Loading…' && (
+              <span className="ml-1 text-[11px] font-semibold text-[#6b6762]">({details.freelancerName})</span>
+            )}
+          </button>
+        </div>
+        <p className="mt-3 text-[11px] text-[#8f8780]">
+          Dispute: <span className="font-bold text-[#1a1a1a]">{dispute?.title}</span> · Contract: <span className="font-bold text-[#1a1a1a]">{details.contractTitle}</span> · Job: <span className="font-bold text-[#1a1a1a]">{details.jobTitle}</span>
+        </p>
+      </section>
+
+      <section className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">        {/* Left column: Evidence Description & Resolution Controls */}
         <div className="space-y-6">
           <Panel title="Description & Evidence" subtitle="Provided by the reporter of the dispute.">
             <div className="space-y-4">

@@ -64,6 +64,7 @@ interface ChatViewProps {
   paymentStatus?: 'unfunded' | 'invoice_created' | 'funded' | 'released' | 'disputed' | 'expired';
   paymentAmountSats?: number;
   paymentTotalAmountSats?: number;
+  proposedRate?: number;
   paymentInstallments?: number;
   paymentCurrentInstallment?: number;
   paymentPaidAmountSats?: number;
@@ -78,6 +79,7 @@ interface ChatViewProps {
     installments: number;
     fundingMode: FundingMode;
     milestoneTitles: string[];
+    chosenAmount?: number;
   }) => Promise<string | void>;
   onVerifyPayment?: (paymentRequest?: string) => Promise<'funded' | 'pending' | 'expired'>;
   onSubmitWork?: (payload: { description: string; link: string; file?: File | null }) => Promise<void>;
@@ -112,6 +114,7 @@ interface ChatViewProps {
   paymentStatus = 'unfunded',
   paymentAmountSats,
   paymentTotalAmountSats,
+  proposedRate,
   paymentInstallments,
   paymentCurrentInstallment,
   paymentPaidAmountSats = 0,
@@ -153,6 +156,8 @@ interface ChatViewProps {
   const [invoiceCopied, setInvoiceCopied] = useState(false);
   const [isPaymentExpanded, setIsPaymentExpanded] = useState(false);
   const [isWorkExpanded, setIsWorkExpanded] = useState(false);
+  // Price choice: null = not yet chosen, 'proposed' | 'job_budget'
+  const [priceChoice, setPriceChoice] = useState<'proposed' | 'job_budget' | null>(null);
   const [workDescription, setWorkDescription] = useState('');
   const [workLink, setWorkLink] = useState('');
   const [workFile, setWorkFile] = useState<File | null>(null);
@@ -309,10 +314,24 @@ interface ChatViewProps {
       const normalizedTitles = milestoneTitles
         .slice(0, selectedInstallments)
         .map((title, index) => title.trim() || `Milestone ${index + 1}`);
+
+      // Resolve the chosen amount
+      const showPriceChoice = !hasPaidMilestone && proposedRate && proposedRate > 0 && proposedRate !== totalAmount;
+      let chosenAmount: number | undefined;
+      if (showPriceChoice) {
+        if (priceChoice === 'proposed') chosenAmount = proposedRate;
+        else if (priceChoice === 'job_budget') chosenAmount = totalAmount;
+        else {
+          setPaymentError('Please choose which price you want to pay before generating the invoice.');
+          return;
+        }
+      }
+
       const newPaymentRequest = await onCreatePaymentInvoice({
         installments: selectedInstallments,
         fundingMode: selectedFundingMode,
         milestoneTitles: normalizedTitles,
+        chosenAmount,
       });
       if (newPaymentRequest) {
         setActivePaymentRequest(newPaymentRequest);
@@ -733,6 +752,61 @@ interface ChatViewProps {
 
               {canChoosePlan ? (
                 <div className="rounded-[10px] border border-[#EAE7E2] bg-white px-3 py-3">
+
+                  {/* ── Price choice — only shown when proposal rate differs from job budget ── */}
+                  {!hasPaidMilestone && proposedRate && proposedRate > 0 && proposedRate !== totalAmount ? (
+                    <div className="mb-4">
+                      <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#8C4F00] mb-2">
+                        Which price are you paying?
+                      </div>
+                      <p className="text-[11px] text-[#6b6762] mb-3">
+                        The freelancer proposed <span className="font-black text-[#1a1a1a]">{proposedRate.toLocaleString()} sats</span>. The job budget is <span className="font-black text-[#1a1a1a]">{totalAmount.toLocaleString()} sats</span>.
+                      </p>
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <button
+                          type="button"
+                          onClick={() => setPriceChoice('proposed')}
+                          className={`rounded-[10px] border px-3 py-3 text-left transition ${
+                            priceChoice === 'proposed'
+                              ? 'border-[#CC7000] bg-[#FFF4E6]'
+                              : 'border-[#EAE7E2] bg-[#F7F6F3] hover:bg-[#FFF4E6]/50'
+                          }`}
+                        >
+                          <div className="flex items-start gap-2">
+                            <div className={`mt-0.5 h-4 w-4 flex-shrink-0 rounded-full border-2 flex items-center justify-center ${priceChoice === 'proposed' ? 'border-[#CC7000] bg-[#CC7000]' : 'border-[#C8A87A]'}`}>
+                              {priceChoice === 'proposed' && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
+                            </div>
+                            <div>
+                              <p className="text-[11px] font-black text-[#1a1a1a]">Freelancer's proposed price</p>
+                              <p className="text-[13px] font-black text-[#8C4F00]">{proposedRate.toLocaleString()} sats</p>
+                              <p className="text-[10px] text-[#6b6762] mt-0.5">+ {Math.ceil(proposedRate * (platformFeePercent ?? 5) / 100).toLocaleString()} sats platform fee</p>
+                            </div>
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPriceChoice('job_budget')}
+                          className={`rounded-[10px] border px-3 py-3 text-left transition ${
+                            priceChoice === 'job_budget'
+                              ? 'border-[#CC7000] bg-[#FFF4E6]'
+                              : 'border-[#EAE7E2] bg-[#F7F6F3] hover:bg-[#FFF4E6]/50'
+                          }`}
+                        >
+                          <div className="flex items-start gap-2">
+                            <div className={`mt-0.5 h-4 w-4 flex-shrink-0 rounded-full border-2 flex items-center justify-center ${priceChoice === 'job_budget' ? 'border-[#CC7000] bg-[#CC7000]' : 'border-[#C8A87A]'}`}>
+                              {priceChoice === 'job_budget' && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
+                            </div>
+                            <div>
+                              <p className="text-[11px] font-black text-[#1a1a1a]">Job budget</p>
+                              <p className="text-[13px] font-black text-[#8C4F00]">{totalAmount.toLocaleString()} sats</p>
+                              <p className="text-[10px] text-[#6b6762] mt-0.5">+ {Math.ceil(totalAmount * (platformFeePercent ?? 5) / 100).toLocaleString()} sats platform fee</p>
+                            </div>
+                          </div>
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+
                   <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#8C4F00]">
                     Milestone schedule
                   </div>
@@ -791,11 +865,30 @@ interface ChatViewProps {
                     ))}
                   </div>
                   {totalAmount ? (
-                    <p className="mt-2 text-[11px] leading-5 text-[#6b6762]">
-                      {selectedFundingMode === 'full'
-                        ? `Invoice: ${clientPayableTotal.toLocaleString()} sats. This includes ${computedPlatformFee.toLocaleString()} sats platform fee. Releases still happen per milestone.`
-                        : `First invoice: ${splitClientAmount(1).toLocaleString()} sats. Freelancer portion: ${splitAmount(1).toLocaleString()} sats, with the platform fee included.`}
-                    </p>
+                    (() => {
+                      // Use chosen price if available, otherwise fall back to job budget total
+                      const showPriceChoice = !hasPaidMilestone && proposedRate && proposedRate > 0 && proposedRate !== totalAmount;
+                      const effectiveBase = showPriceChoice && priceChoice === 'proposed' ? proposedRate! : totalAmount;
+                      const effectiveFee = Math.ceil(effectiveBase * (platformFeePercent ?? 5) / 100);
+                      const effectiveTotal = effectiveBase + effectiveFee;
+                      const effectiveSplit1 = (() => {
+                        const base = Math.floor(effectiveTotal / selectedInstallments);
+                        const rem = effectiveTotal % selectedInstallments;
+                        return base + (1 <= rem ? 1 : 0);
+                      })();
+                      const effectiveFreelancerSplit1 = (() => {
+                        const base = Math.floor(effectiveBase / selectedInstallments);
+                        const rem = effectiveBase % selectedInstallments;
+                        return base + (1 <= rem ? 1 : 0);
+                      })();
+                      return (
+                        <p className="mt-2 text-[11px] leading-5 text-[#6b6762]">
+                          {selectedFundingMode === 'full'
+                            ? `Invoice: ${effectiveTotal.toLocaleString()} sats. This includes ${effectiveFee.toLocaleString()} sats platform fee. Releases still happen per milestone.`
+                            : `First invoice: ${effectiveSplit1.toLocaleString()} sats. Freelancer portion: ${effectiveFreelancerSplit1.toLocaleString()} sats, with the platform fee included.`}
+                        </p>
+                      );
+                    })()
                   ) : (
                     <p className="mt-2 text-[11px] leading-5 text-[#6b6762]">
                       Add a contract budget before creating an escrow invoice.
