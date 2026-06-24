@@ -101,6 +101,7 @@ type Conversation = {
   escrowReleasedSats?: number;
   paymentRequest?: string;
   paymentHash?: string;
+  paymentCreatedAt?: any;
   workStatus?: "not_started" | "in_progress" | "submitted" | "changes_requested" | "approved" | "completed";
   submissionMessage?: string;
   submissionLink?: string;
@@ -141,6 +142,28 @@ const parseSats = (value: unknown) => {
   if (typeof value === "number") return value;
   const cleaned = String(value ?? "").replace(/[^0-9]/g, "");
   return cleaned ? Number(cleaned) : 0;
+};
+
+const THIRTY_MINUTES_MS = 30 * 60 * 1000;
+
+const getTimestampMs = (value: unknown) => {
+  if (!value) return 0;
+  if (typeof value === "number") return value;
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "object") {
+    const typed = value as { toDate?: () => Date; seconds?: number };
+    if (typeof typed.toDate === "function") return typed.toDate().getTime();
+    if (typeof typed.seconds === "number") return typed.seconds * 1000;
+  }
+  const parsed = new Date(String(value));
+  return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
+};
+
+const isInvoiceExpiredByAge = (data: { paymentCreatedAt?: unknown; paymentStatus?: string; paymentRequest?: string }) => {
+  if (data.paymentStatus !== "invoice_created" || !data.paymentRequest) return false;
+  const createdAtMs = getTimestampMs(data.paymentCreatedAt);
+  if (!createdAtMs) return false;
+  return Date.now() - createdAtMs >= THIRTY_MINUTES_MS;
 };
 
 const buildMilestones = (jobAmount: number, totalClientPayable: number, count: number) =>
@@ -259,6 +282,7 @@ export default function MessagesPage() {
               escrowReleasedSats: Number(data.escrowReleasedSats ?? 0),
               paymentRequest: data.paymentRequest ?? "",
               paymentHash: data.paymentHash ?? "",
+              paymentCreatedAt: data.paymentCreatedAt ?? null,
               workStatus: data.workStatus ?? "not_started",
               submissionMessage: data.submissionMessage ?? "",
               submissionLink: data.submissionLink ?? "",
@@ -605,6 +629,10 @@ export default function MessagesPage() {
     paymentRequestOverride?: string
   ): Promise<"funded" | "pending" | "expired"> => {
     if (!selectedConversation) return "pending";
+    const contractId =
+      selectedConversation.jobId && selectedConversation.freelancerId
+        ? `${selectedConversation.jobId}_${selectedConversation.freelancerId}`
+        : selectedConversation.id;
     const paymentRequestToCheck = paymentRequestOverride || selectedConversation?.paymentRequest;
     if (!paymentRequestToCheck || !currentUserId) return "pending";
 
@@ -627,10 +655,6 @@ export default function MessagesPage() {
     if (blinkStatus === "PAID") {
       const paymentInstallments = selectedConversation.paymentInstallments || 1;
       const currentInstallment = selectedConversation.paymentCurrentInstallment || 1;
-      const contractId =
-        selectedConversation.jobId && selectedConversation.freelancerId
-          ? `${selectedConversation.jobId}_${selectedConversation.freelancerId}`
-          : selectedConversation.id;
       const paymentHash = statusPayload?.paymentHash ?? selectedConversation.paymentHash ?? "";
       const contractSnap = await getDoc(doc(firebaseDb, "contracts", contractId));
       const contractData = contractSnap.exists() ? (contractSnap.data() as any) : {};
@@ -749,6 +773,26 @@ export default function MessagesPage() {
       }).catch(console.error);
 
       return "funded";
+    }
+
+    if (isInvoiceExpiredByAge(selectedConversation)) {
+      await updateDoc(doc(firebaseDb, "conversations", selectedConversation.id), {
+        paymentStatus: "expired",
+        paymentRequest: "",
+        paymentHash: "",
+        updatedAt: serverTimestamp(),
+      });
+      await setDoc(
+        doc(firebaseDb, "contracts", contractId),
+        {
+          paymentStatus: "expired",
+          paymentRequest: "",
+          paymentHash: "",
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+      return "expired";
     }
 
     return "pending";
