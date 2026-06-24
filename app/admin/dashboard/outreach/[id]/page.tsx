@@ -15,7 +15,7 @@ import {
 import { AdminBackLink, AdminPageHeader, StatusPill } from "@/components/organisms/AdminDashboardParts";
 import { firebaseDb, firebaseAuth } from "@/lib/firebase";
 import { sendUserNotification } from "@/lib/notifications";
-import { formatDateTime } from "@/lib/admin-dashboard";
+import { formatDateTime, type FirestoreDate } from "@/lib/admin-dashboard";
 import { Send } from "lucide-react";
 
 type OutreachMessage = {
@@ -23,7 +23,7 @@ type OutreachMessage = {
   senderId: string;
   senderRole: string;
   text: string;
-  createdAt?: unknown;
+  createdAt?: FirestoreDate;
 };
 
 type Thread = {
@@ -35,8 +35,8 @@ type Thread = {
   subject: string;
   status: string;
   unreadByRecipient: boolean;
-  createdAt?: unknown;
-  updatedAt?: unknown;
+  createdAt?: FirestoreDate;
+  updatedAt?: FirestoreDate;
 };
 
 export default function AdminOutreachThreadPage() {
@@ -139,7 +139,7 @@ export default function AdminOutreachThreadPage() {
                   isAdmin ? "border-[#FFD7A8] bg-[#FFF4E6]" : "border-[#E7E1D8] bg-white"
                 }`}>
                   <div className="mb-1 text-[9px] font-black uppercase tracking-[0.12em] text-[#8f8780]">
-                    {isAdmin ? "Admin" : thread.recipientName} · {formatDateTime(msg.createdAt as any)}
+                    {isAdmin ? "Admin" : thread.recipientName} · {formatDateTime(msg.createdAt)}
                   </div>
                   <p className="whitespace-pre-wrap text-sm leading-6 text-[#1a1a1a]">{msg.text}</p>
                 </div>

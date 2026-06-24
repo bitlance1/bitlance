@@ -23,7 +23,7 @@ import {
   StatusPill,
 } from "@/components/organisms/AdminDashboardParts";
 import { firebaseDb, firebaseAuth } from "@/lib/firebase";
-import { formatDateTime, formatSats } from "@/lib/admin-dashboard";
+import { formatDateTime, formatSats, type FirestoreDate } from "@/lib/admin-dashboard";
 import { sendUserNotification } from "@/lib/notifications";
 import {
   AlertCircle,
@@ -51,8 +51,8 @@ type TerminationRequest = {
   escrowReleasedSats: number;
   status: "pending" | "approved" | "rejected";
   adminNote: string;
-  createdAt?: unknown;
-  updatedAt?: unknown;
+  createdAt?: FirestoreDate;
+  updatedAt?: FirestoreDate;
 };
 
 type ChatMessage = {
@@ -62,7 +62,7 @@ type ChatMessage = {
   text?: string;
   messageType?: string;
   attachment?: { name?: string; url?: string } | null;
-  createdAt?: unknown;
+  createdAt?: FirestoreDate;
 };
 
 export default function AdminTerminationDetailPage() {
