@@ -2779,6 +2779,12 @@ export default function ClientMessagesPage() {
     return paymentRequest;
   };
 
+  const handleCancelInvoice = async () => {
+    if (!selectedConversation) return;
+    const contractId = getContractId(selectedConversation);
+    await clearUnpaidInvoice(selectedConversation.id, contractId);
+  };
+
   const handleVerifyPayment = async (
     paymentRequestOverride?: string
   ): Promise<"funded" | "pending" | "expired"> => {
@@ -2995,6 +3001,7 @@ export default function ClientMessagesPage() {
                     }`}
                     onCreatePaymentInvoice={handleCreatePaymentInvoice}
                     onVerifyPayment={handleVerifyPayment}
+                    onCancelInvoice={handleCancelInvoice}
                     onApproveSubmission={handleApproveSubmission}
                     onRequestChanges={handleRequestChanges}
                     pendingSubmissionJob={pendingSubmissionJob}

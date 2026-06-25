@@ -2507,6 +2507,7 @@ interface ChatViewProps {
     chosenAmount?: number;
   }) => Promise<string | void>;
   onVerifyPayment?: (paymentRequest?: string) => Promise<'funded' | 'pending' | 'expired'>;
+  onCancelInvoice?: () => Promise<void>;
   onSubmitWork?: (payload: { description: string; link: string; file?: File | null }) => Promise<void>;
   submittedWorkHref?: string;
   onApproveSubmission?: () => Promise<void>;
@@ -2553,6 +2554,7 @@ export default function ChatView({
   workStatus = 'not_started',
   onCreatePaymentInvoice,
   onVerifyPayment,
+  onCancelInvoice,
   onSubmitWork,
   submittedWorkHref,
   onApproveSubmission,
@@ -2582,6 +2584,7 @@ export default function ChatView({
   const [invoiceCopied, setInvoiceCopied] = useState(false);
   const [isPaymentExpanded, setIsPaymentExpanded] = useState(false);
   const [isWorkExpanded, setIsWorkExpanded] = useState(false);
+  const [isCancellingInvoice, setIsCancellingInvoice] = useState(false);
   const [priceChoice, setPriceChoice] = useState<'proposed' | 'job_budget' | null>(null);
   const [jobBudgetSats, setJobBudgetSats] = useState<number | null>(null);
   const [workDescription, setWorkDescription] = useState('');
@@ -2843,6 +2846,25 @@ export default function ChatView({
       }
     } finally {
       setIsVerifyingPayment(false);
+    }
+  };
+
+  const handleCancelInvoice = async () => {
+    if (!onCancelInvoice || isCancellingInvoice) return;
+    
+    const confirmed = window.confirm(
+      "Are you sure you want to cancel the current payment request? Do not pay the previous QR code/invoice if you proceed."
+    );
+    if (!confirmed) return;
+
+    try {
+      setIsCancellingInvoice(true);
+      setPaymentError('');
+      await onCancelInvoice();
+    } catch (error) {
+      setPaymentError(error instanceof Error ? error.message : 'Unable to cancel invoice.');
+    } finally {
+      setIsCancellingInvoice(false);
     }
   };
 
@@ -3186,10 +3208,21 @@ export default function ChatView({
                       size="sm"
                       variant="outline"
                       onClick={() => void handleVerifyPayment()}
-                      disabled={isVerifyingPayment}
+                      disabled={isVerifyingPayment || isCancellingInvoice}
                       className="rounded-full"
                     >
                       {isVerifyingPayment ? 'Checking...' : 'Check Payment'}
+                    </Button>
+                  ) : null}
+                  {showCurrentInvoice && onCancelInvoice ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => void handleCancelInvoice()}
+                      disabled={isCancellingInvoice || isVerifyingPayment}
+                      className="rounded-full border-red-200 text-red-600 hover:bg-red-50"
+                    >
+                      {isCancellingInvoice ? 'Cancelling...' : 'Cancel Invoice / Change Setup'}
                     </Button>
                   ) : null}
                 </div>
