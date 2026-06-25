@@ -1997,13 +1997,58 @@ export default function ClientMessagesPage() {
               }
             }
 
+            let proposedRate = Number(data.proposedRate ?? 0);
+            let proposalId = data.proposalId ?? "";
+
+            if (freelancerId && (!proposedRate || !proposalId)) {
+              try {
+                if (!proposalId && data.jobId) {
+                  const proposalsQuery = query(
+                    collection(firebaseDb, "proposals"),
+                    where("jobId", "==", data.jobId),
+                    where("freelancerId", "==", freelancerId),
+                    limit(1)
+                  );
+                  const proposalsSnap = await getDocs(proposalsQuery);
+                  if (!proposalsSnap.empty) {
+                    proposalId = proposalsSnap.docs[0].id;
+                    const pData = proposalsSnap.docs[0].data() as any;
+                    proposedRate = parseSats(pData.rate || pData.amount || pData.budget || 0);
+
+                    // Heal conversation and contract documents in background
+                    const updateData: Record<string, any> = { proposalId };
+                    if (proposedRate > 0) {
+                      updateData.proposedRate = proposedRate;
+                    }
+                    await updateDoc(docSnap.ref, updateData);
+                    const contractId = getContractId({ id: docSnap.id, jobId: data.jobId, freelancerId } as any);
+                    await setDoc(doc(firebaseDb, "contracts", contractId), updateData, { merge: true });
+                  }
+                } else if (proposalId && !proposedRate) {
+                  const proposalSnap = await getDoc(doc(firebaseDb, "proposals", proposalId));
+                  if (proposalSnap.exists()) {
+                    const pData = proposalSnap.data() as any;
+                    proposedRate = parseSats(pData.rate || pData.amount || pData.budget || 0);
+
+                    if (proposedRate > 0) {
+                      await updateDoc(docSnap.ref, { proposedRate });
+                      const contractId = getContractId({ id: docSnap.id, jobId: data.jobId, freelancerId } as any);
+                      await setDoc(doc(firebaseDb, "contracts", contractId), { proposedRate }, { merge: true });
+                    }
+                  }
+                }
+              } catch (err) {
+                console.error("Failed to query or heal proposal details:", err);
+              }
+            }
+
             const normalizedPaymentStatus = normalizePaymentStatus(data);
             const isFundedRecord = normalizedPaymentStatus === "funded" || normalizedPaymentStatus === "released";
 
             return {
               id: docSnap.id,
               jobId: data.jobId ?? "",
-              proposalId: data.proposalId ?? "",
+              proposalId: proposalId || data.proposalId || "",
               jobTitle: data.jobTitle ?? "",
               clientId: data.clientId ?? "",
               clientName: data.clientName ?? "",
@@ -2018,7 +2063,7 @@ export default function ClientMessagesPage() {
               paymentStatus: normalizedPaymentStatus,
               paymentAmountSats: Number(data.paymentAmountSats ?? 0),
               paymentTotalAmountSats: Number(data.paymentTotalAmountSats ?? 0),
-              proposedRate: Number(data.proposedRate ?? 0),
+              proposedRate: proposedRate || Number(data.proposedRate ?? 0),
               paymentInstallments: Number(data.paymentInstallments ?? 0),
               paymentCurrentInstallment: Number(data.paymentCurrentInstallment ?? 0),
               paymentPaidAmountSats: isFundedRecord ? Number(data.paymentPaidAmountSats ?? 0) : 0,
