@@ -297,48 +297,48 @@ export default function FreelancerOnboardingPage() {
             <div>
               <p className="text-[14px] font-bold text-[#1a1a1a] mb-0.5">Choose your primary skill area</p>
               <p className="text-[12px] text-[#9e9690] mb-3">Select the category that best represents your expertise.</p>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(90px,1fr))] md:grid-cols-4 gap-2">
                 {CATEGORIES.slice(0, 8).map((cat) => (
                   <button
                     key={cat.name}
                     type="button"
                     onClick={() => setCategory(cat.name)}
-                    className={`flex items-center gap-2 px-3 py-2.5 rounded-[12px] border text-left transition-all ${
+                    className={`flex items-center gap-1.5 px-2 py-2 sm:gap-2 sm:px-3 sm:py-2.5 rounded-[12px] border text-left transition-all ${
                       category === cat.name
                         ? "border-[#F7931A] bg-[#FFFAF5]"
                         : "border-[#E8E2D9] bg-white hover:border-[#F7931A]/50"
                     }`}
                   >
                     <span
-                      className="flex-shrink-0 w-8 h-8 rounded-[8px] flex items-center justify-center"
+                      className="flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-[8px] flex items-center justify-center"
                       style={{ backgroundColor: cat.iconBg, color: cat.iconColor }}
                     >
                       {cat.icon}
                     </span>
-                    <span className="text-[12px] font-semibold text-[#1a1a1a] leading-tight">{cat.name}</span>
+                    <span className="text-[10px] sm:text-[12px] font-semibold text-[#1a1a1a] leading-tight">{cat.name}</span>
                   </button>
                 ))}
               </div>
               {CATEGORIES.length > 8 && (
-                <div className="grid grid-cols-4 gap-2 mt-2">
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(90px,1fr))] md:grid-cols-4 gap-2 mt-2">
                   {CATEGORIES.slice(8).map((cat) => (
                     <button
                       key={cat.name}
                       type="button"
                       onClick={() => setCategory(cat.name)}
-                      className={`flex items-center gap-2 px-3 py-2.5 rounded-[12px] border text-left transition-all ${
+                      className={`flex items-center gap-1.5 px-2 py-2 sm:gap-2 sm:px-3 sm:py-2.5 rounded-[12px] border text-left transition-all ${
                         category === cat.name
                           ? "border-[#F7931A] bg-[#FFFAF5]"
                           : "border-[#E8E2D9] bg-white hover:border-[#F7931A]/50"
                       }`}
                     >
                       <span
-                        className="flex-shrink-0 w-8 h-8 rounded-[8px] flex items-center justify-center"
+                        className="flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-[8px] flex items-center justify-center"
                         style={{ backgroundColor: cat.iconBg, color: cat.iconColor }}
                       >
                         {cat.icon}
                       </span>
-                      <span className="text-[12px] font-semibold text-[#1a1a1a] leading-tight">{cat.name}</span>
+                      <span className="text-[10px] sm:text-[12px] font-semibold text-[#1a1a1a] leading-tight">{cat.name}</span>
                     </button>
                   ))}
                 </div>
@@ -560,10 +560,10 @@ export default function FreelancerOnboardingPage() {
             >
               <ArrowLeftIcon /> Back
             </button>
-            <div className="flex items-center gap-1.5">
+            {/* <div className="flex items-center gap-1.5">
               <ShieldIcon />
               <span className="text-[12px] text-[#9e9690]">Secure. Private. Bitcoin-powered.</span>
-            </div>
+            </div> */}
           </div>
           <button
             type="button"

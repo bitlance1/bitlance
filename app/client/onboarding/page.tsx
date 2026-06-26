@@ -290,32 +290,32 @@ export default function ClientOnboardingPage() {
           <div>
             <div className="mb-5">
               <label className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#999] mb-2 block">Industry</label>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(90px,1fr))] md:grid-cols-4 gap-2">
                 {INDUSTRIES.map((ind) => (
                   <button
                     key={ind.name}
                     type="button"
                     onClick={() => setIndustry(ind.name)}
-                    className={`flex items-center gap-2 px-3 py-2.5 rounded-[12px] border text-left transition-all ${
+                    className={`flex items-center gap-1.5 px-2 py-2 sm:gap-2 sm:px-3 sm:py-2.5 rounded-[12px] border text-left transition-all ${
                       industry === ind.name
                         ? "border-[#F7931A] bg-[#FFFAF5]"
                         : "border-[#E8E2D9] bg-white hover:border-[#F7931A]/50"
                     }`}
                   >
                     <span
-                      className="flex-shrink-0 w-8 h-8 rounded-[8px] flex items-center justify-center"
+                      className="flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-[8px] flex items-center justify-center"
                       style={{ backgroundColor: ind.iconBg, color: ind.iconColor }}
                     >
                       {ind.icon}
                     </span>
-                    <span className="text-[12px] font-semibold text-[#1a1a1a] leading-tight">{ind.name}</span>
+                    <span className="text-[10px] sm:text-[12px] font-semibold text-[#1a1a1a] leading-tight">{ind.name}</span>
                   </button>
                 ))}
               </div>
             </div>
             <div>
               <label className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#999] mb-2 block">Team Size</label>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                 {TEAM_SIZES.map((size) => (
                   <button
                     key={size}
@@ -483,10 +483,10 @@ export default function ClientOnboardingPage() {
             >
               <ArrowLeftIcon /> Back
             </button>
-            <div className="flex items-center gap-1.5">
+            {/* <div className="flex items-center gap-1.5">
               <ShieldIcon />
               <span className="text-[12px] text-[#9e9690]">Secure. Private. Bitcoin-powered.</span>
-            </div>
+            </div> */}
           </div>
           <button
             type="button"
