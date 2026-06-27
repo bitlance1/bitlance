@@ -184,7 +184,7 @@ export default function FreelancerSidebar({ active = '/freelancer/dashboard', hi
           return (data.unread?.[user.uid] ?? 0) > 0;
         });
         setHasUnreadMessages(hasUnread);
-      });
+      }, () => {});
 
       const contractsQuery = query(
         collection(firebaseDb, 'contracts'),
@@ -193,7 +193,7 @@ export default function FreelancerSidebar({ active = '/freelancer/dashboard', hi
       );
       unsubscribeContracts = onSnapshot(contractsQuery, (snapshot) => {
         setHasUnreadContracts(!snapshot.empty);
-      });
+      }, () => {});
 
       const submittedJobsQuery = query(
         collection(firebaseDb, 'submitted_jobs'),
@@ -202,7 +202,7 @@ export default function FreelancerSidebar({ active = '/freelancer/dashboard', hi
       );
       unsubscribeSubmittedJobs = onSnapshot(submittedJobsQuery, (snapshot) => {
         setHasRejectedSubmission(!snapshot.empty);
-      });
+      }, () => {});
 
       const adminInboxQuery = query(
         collection(firebaseDb, 'admin_outreach'),
@@ -211,7 +211,7 @@ export default function FreelancerSidebar({ active = '/freelancer/dashboard', hi
       );
       unsubscribeAdminInbox = onSnapshot(adminInboxQuery, (snapshot) => {
         setHasUnreadAdminInbox(!snapshot.empty);
-      });
+      }, () => {});
     });
 
     return () => {

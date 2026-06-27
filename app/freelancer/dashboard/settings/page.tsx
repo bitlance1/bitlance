@@ -114,12 +114,14 @@ export default function SettingsPage() {
   };
 
   const confirmDeleteAccount = async () => {
+    const user = firebaseAuth.currentUser;
+    if (!user) return;
     try {
-      const uid = currentUser.uid;
-      await deleteUser(currentUser);
+      const uid = user.uid;
       await deleteDoc(doc(firebaseDb, 'all_users', uid));
       await deleteDoc(doc(firebaseDb, 'freelancers', uid));
-      router.push('/signup');
+      await deleteUser(user);
+      window.location.href = '/signup';
     } catch (error: any) {
       if (error.code === 'auth/requires-recent-login') {
         alert('For your security, please logout and log back in again to confirm account deletion.');

@@ -255,12 +255,15 @@ export default function HelpCenterPage() {
                       </div>
 
                       <div className="mt-4">
-                        <button
-                          onClick={() => handleSuggestionClick("Hi, I need help with my freelancer account.")}
-                          className="w-full border border-gray-300 hover:border-gray-800 text-gray-900 bg-white hover:bg-gray-50 font-black text-xs uppercase tracking-wider py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 transition duration-200 cursor-pointer"
+                        <a
+                          href="https://mail.google.com/mail/?view=cm&fs=1&to=Bitlance1@gmail.com&su=Freelancer+Support+Request"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={handleEmailClick}
+                          className="w-full border border-gray-300 hover:border-gray-800 text-gray-900 bg-white hover:bg-gray-50 font-black text-xs uppercase tracking-wider py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 transition duration-200 cursor-pointer text-center"
                         >
-                          <MessageSquare className="h-4 w-4 text-gray-500" /> Start Live Chat
-                        </button>
+                          <Mail className="h-4 w-4 text-gray-500" /> {copiedEmail ? "Copied!" : "Email Support"}
+                        </a>
 
                         <div className="flex items-center justify-center gap-1.5 text-xs text-gray-500 mt-3">
                           <span className="w-1.5 h-1.5 rounded-full bg-[#FF6A00]" />
@@ -364,7 +367,7 @@ export default function HelpCenterPage() {
 
                   </div>
 
-                  {/* Still need help callout banner */}
+                  {/* Still need help callout banner commented out
                   <div className="w-full bg-[#FFF9F6] border border-orange-100/80 rounded-2xl p-6 sm:p-8 mt-12 flex flex-col md:flex-row justify-between items-center gap-6 shadow-sm">
                     <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 text-center sm:text-left">
                       <div className="w-12 h-12 rounded-full bg-[#FF6A00] flex items-center justify-center text-white flex-shrink-0">
@@ -398,6 +401,7 @@ export default function HelpCenterPage() {
                       </a>
                     </div>
                   </div>
+                  */}
                 </>
               )}
             </div>
