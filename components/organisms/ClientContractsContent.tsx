@@ -40,6 +40,7 @@ type Contract = {
   nextMilestone: string;
   status: ContractStatus;
   budget: string;
+  proposedRate?: number;
   startDate: string;
   dueDate: string;
   description: string;
@@ -560,6 +561,7 @@ export default function ClientContractsContent() {
               milestones: Array.isArray(data.milestones) ? data.milestones : [],
               terminationStatus: (data.terminationStatus as Contract["terminationStatus"]) ?? "none",
               terminationRequestId: data.terminationRequestId ?? "",
+              proposedRate: Number(data.proposedRate ?? 0),
             };
           });
           (async () => {
@@ -719,7 +721,18 @@ export default function ClientContractsContent() {
       const releasedInstallments = contract.paymentReleasedInstallments ?? 0;
       const nextMilestoneIndex = releasedInstallments + 1;
       const milestone = contract.milestones?.find((item: any, index) => Number(item.index ?? index + 1) === nextMilestoneIndex);
-      const totalAmount = contract.paymentTotalAmountSats || parseSats(contract.budget) || 0;
+      const budgetAmount = parseSats(contract.budget);
+      const proposedAmount = Number(contract.proposedRate ?? 0);
+      const milestonesTotal = Array.isArray(contract.milestones)
+        ? contract.milestones.reduce((sum: number, m: any) => sum + Number(m.freelancerAmountSats ?? 0), 0)
+        : 0;
+      const fundedTotal = Number(contract.escrowFundedTotalSats ?? 0);
+      const isProposedRateChosen =
+        proposedAmount > 0 &&
+        (milestonesTotal === proposedAmount ||
+         fundedTotal === proposedAmount ||
+         Number(contract.paymentTotalAmountSats) === proposedAmount);
+      const totalAmount = isProposedRateChosen ? proposedAmount : budgetAmount;
       const milestoneAmount = Number((milestone as any)?.freelancerAmountSats ?? calculateInstallmentAmount(totalAmount, totalInstallments, nextMilestoneIndex));
       const milestoneFundedSats = milestone ? Number((milestone as any).fundedSats ?? 0) : milestoneAmount;
       const milestoneReleasedSats = milestone ? Number((milestone as any).releasedSats ?? 0) : 0;
@@ -1882,7 +1895,19 @@ export default function ClientContractsContent() {
               const releasedInstallments = contract?.paymentReleasedInstallments ?? 0;
               const nextMilestoneIndex = releasedInstallments + 1;
               const milestone = contract?.milestones?.find((item: any, index) => Number(item.index ?? index + 1) === nextMilestoneIndex);
-              const milestoneAmountSats = Number((milestone as any)?.freelancerAmountSats ?? calculateInstallmentAmount(contract?.paymentTotalAmountSats || parseSats(contract?.budget ?? "0"), contract?.paymentInstallments ?? 1, nextMilestoneIndex));
+              const budgetAmount = parseSats(contract?.budget ?? "0");
+              const proposedAmount = Number(contract?.proposedRate ?? 0);
+              const milestonesTotal = Array.isArray(contract?.milestones)
+                ? contract.milestones.reduce((sum: number, m: any) => sum + Number(m.freelancerAmountSats ?? 0), 0)
+                : 0;
+              const fundedTotal = Number(contract?.escrowFundedTotalSats ?? 0);
+              const isProposedRateChosen =
+                proposedAmount > 0 &&
+                (milestonesTotal === proposedAmount ||
+                 fundedTotal === proposedAmount ||
+                 Number(contract?.paymentTotalAmountSats) === proposedAmount);
+              const totalAmount = isProposedRateChosen ? proposedAmount : budgetAmount;
+              const milestoneAmountSats = Number((milestone as any)?.freelancerAmountSats ?? calculateInstallmentAmount(totalAmount, contract?.paymentInstallments ?? 1, nextMilestoneIndex));
               const milestoneLabel = milestone?.title || milestone?.name || `Milestone ${nextMilestoneIndex}`;
               const milestoneFundedSats = milestone ? Number((milestone as any).fundedSats ?? 0) : milestoneAmountSats;
               const milestoneReleasedSats = milestone ? Number((milestone as any).releasedSats ?? 0) : 0;

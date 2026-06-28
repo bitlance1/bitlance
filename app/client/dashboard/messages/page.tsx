@@ -1705,11 +1705,11 @@ const hasFundedEscrow = (data: Record<string, unknown>) => {
   const releasedTotal = Number(data.escrowReleasedSats ?? 0);
   const hasFundedMilestone = Array.isArray(data.milestones)
     ? data.milestones.some((milestone) => {
-        const item = milestone as Record<string, unknown>;
-        const funded = numberField(item.fundedSats);
-        const released = numberField(item.releasedSats);
-        return funded > released;
-      })
+      const item = milestone as Record<string, unknown>;
+      const funded = numberField(item.fundedSats);
+      const released = numberField(item.releasedSats);
+      return funded > released;
+    })
     : false;
 
   return fundedTotal > releasedTotal || hasFundedMilestone;
@@ -2164,12 +2164,12 @@ export default function ClientMessagesPage() {
           isRead: true,
           attachment: attachmentData
             ? {
-                name: attachmentData.name ?? "Attachment",
-                size: attachmentData.size ?? formatFileSize(attachmentData.bytes ?? 0),
-                url: attachmentData.url ?? "",
-                mimeType: attachmentData.mimeType ?? "",
-                resourceType: attachmentData.resourceType ?? "",
-              }
+              name: attachmentData.name ?? "Attachment",
+              size: attachmentData.size ?? formatFileSize(attachmentData.bytes ?? 0),
+              url: attachmentData.url ?? "",
+              mimeType: attachmentData.mimeType ?? "",
+              resourceType: attachmentData.resourceType ?? "",
+            }
             : undefined,
         };
       });
@@ -2233,7 +2233,7 @@ export default function ClientMessagesPage() {
     // Then poll every 60 s so a tab left open also catches expiry
     const interval = window.setInterval(() => void checkInvoice(), 60_000);
     return () => window.clearInterval(interval);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedConversation?.id, selectedConversation?.paymentStatus, selectedConversation?.paymentRequest, selectedConversation?.paymentCreatedAt]);
 
   const messageList = useMemo<MessageListItem[]>(() => {
@@ -2355,7 +2355,18 @@ export default function ClientMessagesPage() {
       const milestone = Array.isArray(contract.milestones)
         ? contract.milestones.find((item: any, index: number) => Number(item.index ?? index + 1) === nextMilestoneIndex)
         : null;
-      const totalAmount = Number(contract.paymentTotalAmountSats ?? parseSats(contract.budget) ?? 0);
+      const budgetAmount = parseSats(contract.budget);
+      const proposedAmount = Number(contract.proposedRate ?? 0);
+      const milestonesTotal = Array.isArray(contract.milestones)
+        ? contract.milestones.reduce((sum: number, m: any) => sum + Number(m.freelancerAmountSats ?? 0), 0)
+        : 0;
+      const fundedTotal = Number(contract.escrowFundedTotalSats ?? 0);
+      const isProposedRateChosen =
+        proposedAmount > 0 &&
+        (milestonesTotal === proposedAmount ||
+         fundedTotal === proposedAmount ||
+         Number(contract.paymentTotalAmountSats) === proposedAmount);
+      const totalAmount = isProposedRateChosen ? proposedAmount : budgetAmount;
       const milestoneAmount = Number((milestone as any)?.freelancerAmountSats ?? calculateInstallmentAmount(totalAmount, totalInstallments, nextMilestoneIndex));
       const milestoneFundedSats = milestone ? Number(milestone.fundedSats ?? 0) : milestoneAmount;
       const milestoneReleasedSats = milestone ? Number(milestone.releasedSats ?? 0) : 0;
@@ -2663,12 +2674,12 @@ export default function ClientMessagesPage() {
     }
     const existingMilestones = hasFundedAny
       ? (escrowSnap.exists() && Array.isArray(escrowData.milestones) && escrowData.milestones.length
-          ? escrowData.milestones
-          : Array.isArray(contractData.milestones) && contractData.milestones.length
-            ? normalizeMilestones(contractData.milestones, false)
-            : Array.isArray(selectedConversation.milestones) && selectedConversation.milestones.length
-              ? normalizeMilestones(selectedConversation.milestones, false)
-              : buildMilestones(totalAmount, totalClientPayable, paymentInstallments, milestoneTitles))
+        ? escrowData.milestones
+        : Array.isArray(contractData.milestones) && contractData.milestones.length
+          ? normalizeMilestones(contractData.milestones, false)
+          : Array.isArray(selectedConversation.milestones) && selectedConversation.milestones.length
+            ? normalizeMilestones(selectedConversation.milestones, false)
+            : buildMilestones(totalAmount, totalClientPayable, paymentInstallments, milestoneTitles))
       : buildMilestones(totalAmount, totalClientPayable, paymentInstallments, milestoneTitles);
     const milestones = existingMilestones.map((milestone: any, index: number) => ({
       index: Number(milestone.index ?? index + 1),
@@ -3039,11 +3050,10 @@ export default function ClientMessagesPage() {
                     milestones={selectedConversation.milestones}
                     paymentRequest={selectedConversation.paymentRequest}
                     workStatus={selectedConversation.workStatus}
-                    submittedWorkHref={`/client/dashboard/contracts?contract=${
-                      selectedConversation.jobId && selectedConversation.freelancerId
+                    submittedWorkHref={`/client/dashboard/contracts?contract=${selectedConversation.jobId && selectedConversation.freelancerId
                         ? `${selectedConversation.jobId}_${selectedConversation.freelancerId}`
                         : selectedConversation.id
-                    }`}
+                      }`}
                     onCreatePaymentInvoice={handleCreatePaymentInvoice}
                     onVerifyPayment={handleVerifyPayment}
                     onCancelInvoice={handleCancelInvoice}
