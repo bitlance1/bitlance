@@ -1671,6 +1671,7 @@ type Conversation = {
   paymentStatus?: "unfunded" | "invoice_created" | "funded" | "released" | "disputed" | "expired";
   paymentAmountSats?: number;
   paymentTotalAmountSats?: number;
+  paymentSubtotalSats?: number;
   proposedRate?: number;
   paymentInstallments?: number;
   paymentCurrentInstallment?: number;
@@ -2363,10 +2364,14 @@ export default function ClientMessagesPage() {
       const fundedTotal = Number(contract.escrowFundedTotalSats ?? 0);
       const isProposedRateChosen =
         proposedAmount > 0 &&
-        (milestonesTotal === proposedAmount ||
+        (Number(contract.paymentSubtotalSats) === proposedAmount ||
+         milestonesTotal === proposedAmount ||
          fundedTotal === proposedAmount ||
          Number(contract.paymentTotalAmountSats) === proposedAmount);
-      const totalAmount = isProposedRateChosen ? proposedAmount : budgetAmount;
+      const totalAmount = Number(
+        contract.paymentSubtotalSats ||
+        (isProposedRateChosen ? proposedAmount : (contract.paymentTotalAmountSats || budgetAmount || 0))
+      );
       const milestoneAmount = Number((milestone as any)?.freelancerAmountSats ?? calculateInstallmentAmount(totalAmount, totalInstallments, nextMilestoneIndex));
       const milestoneFundedSats = milestone ? Number(milestone.fundedSats ?? 0) : milestoneAmount;
       const milestoneReleasedSats = milestone ? Number(milestone.releasedSats ?? 0) : 0;
@@ -2662,7 +2667,7 @@ export default function ClientMessagesPage() {
       0;
     const totalAmount =
       chosenAmount && chosenAmount > 0 ? chosenAmount : originalJobAmount;
-    const jobAmountSats = originalJobAmount || totalAmount;
+    const jobAmountSats = totalAmount;
     const hasFundedAny = fundedAmount > 0;
     const paymentInstallments = hasFundedAny
       ? (selectedConversation.paymentInstallments || Number(contractData.paymentInstallments ?? 0) || clampInstallments(installments))
@@ -2877,7 +2882,12 @@ export default function ClientMessagesPage() {
       if (paymentHash && contractData.lastFundedPaymentHash === paymentHash) {
         return "funded";
       }
-      const jobAmount = selectedConversation.paymentTotalAmountSats || Number(contractData.paymentTotalAmountSats ?? 0) || 0;
+      const jobAmount =
+        selectedConversation.paymentSubtotalSats ||
+        selectedConversation.paymentTotalAmountSats ||
+        Number(contractData.paymentSubtotalSats ?? 0) ||
+        Number(contractData.paymentTotalAmountSats ?? 0) ||
+        0;
       const platformFeeSats =
         selectedConversation.platformFeeSats ||
         Number(contractData.platformFeeSats ?? 0) ||

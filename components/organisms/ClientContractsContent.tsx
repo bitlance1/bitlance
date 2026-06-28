@@ -49,6 +49,7 @@ type Contract = {
   paymentCurrentInstallment?: number;
   paymentReleasedInstallments?: number;
   paymentTotalAmountSats?: number;
+  paymentSubtotalSats?: number;
   paymentTotalChargedSats?: number;
   paymentPaidAmountSats?: number;
   platformFeeSats?: number;
@@ -729,10 +730,14 @@ export default function ClientContractsContent() {
       const fundedTotal = Number(contract.escrowFundedTotalSats ?? 0);
       const isProposedRateChosen =
         proposedAmount > 0 &&
-        (milestonesTotal === proposedAmount ||
+        (Number(contract.paymentSubtotalSats) === proposedAmount ||
+         milestonesTotal === proposedAmount ||
          fundedTotal === proposedAmount ||
          Number(contract.paymentTotalAmountSats) === proposedAmount);
-      const totalAmount = isProposedRateChosen ? proposedAmount : budgetAmount;
+      const totalAmount = Number(
+        contract.paymentSubtotalSats ||
+        (isProposedRateChosen ? proposedAmount : (contract.paymentTotalAmountSats || budgetAmount || 0))
+      );
       const milestoneAmount = Number((milestone as any)?.freelancerAmountSats ?? calculateInstallmentAmount(totalAmount, totalInstallments, nextMilestoneIndex));
       const milestoneFundedSats = milestone ? Number((milestone as any).fundedSats ?? 0) : milestoneAmount;
       const milestoneReleasedSats = milestone ? Number((milestone as any).releasedSats ?? 0) : 0;
@@ -1903,10 +1908,14 @@ export default function ClientContractsContent() {
               const fundedTotal = Number(contract?.escrowFundedTotalSats ?? 0);
               const isProposedRateChosen =
                 proposedAmount > 0 &&
-                (milestonesTotal === proposedAmount ||
+                (Number(contract?.paymentSubtotalSats) === proposedAmount ||
+                 milestonesTotal === proposedAmount ||
                  fundedTotal === proposedAmount ||
                  Number(contract?.paymentTotalAmountSats) === proposedAmount);
-              const totalAmount = isProposedRateChosen ? proposedAmount : budgetAmount;
+              const totalAmount = Number(
+                contract?.paymentSubtotalSats ||
+                (isProposedRateChosen ? proposedAmount : (contract?.paymentTotalAmountSats || budgetAmount || 0))
+              );
               const milestoneAmountSats = Number((milestone as any)?.freelancerAmountSats ?? calculateInstallmentAmount(totalAmount, contract?.paymentInstallments ?? 1, nextMilestoneIndex));
               const milestoneLabel = milestone?.title || milestone?.name || `Milestone ${nextMilestoneIndex}`;
               const milestoneFundedSats = milestone ? Number((milestone as any).fundedSats ?? 0) : milestoneAmountSats;

@@ -89,6 +89,7 @@ type Conversation = {
   paymentStatus?: "unfunded" | "invoice_created" | "funded" | "released" | "disputed" | "expired";
   paymentAmountSats?: number;
   paymentTotalAmountSats?: number;
+  paymentSubtotalSats?: number;
   paymentInstallments?: number;
   paymentCurrentInstallment?: number;
   paymentPaidAmountSats?: number;
@@ -661,7 +662,12 @@ export default function MessagesPage() {
       if (paymentHash && contractData.lastFundedPaymentHash === paymentHash) {
         return "funded";
       }
-      const jobAmount = selectedConversation.paymentTotalAmountSats || Number(contractData.paymentTotalAmountSats ?? 0) || 0;
+      const jobAmount =
+        selectedConversation.paymentSubtotalSats ||
+        selectedConversation.paymentTotalAmountSats ||
+        Number(contractData.paymentSubtotalSats ?? 0) ||
+        Number(contractData.paymentTotalAmountSats ?? 0) ||
+        0;
       const platformFeeSats =
         selectedConversation.platformFeeSats ||
         Number(contractData.platformFeeSats ?? 0) ||
