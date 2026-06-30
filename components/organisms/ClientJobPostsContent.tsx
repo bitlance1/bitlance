@@ -893,7 +893,7 @@ export default function ClientJobPostsContent() {
               {/* Budget & Duration */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semiold text-zinc-700">Budget</label>
+                  <label className="text-xs font-semibold text-zinc-700">Budget</label>
                   <div className="relative flex items-center">
                     <input
                       value={editBudget}
