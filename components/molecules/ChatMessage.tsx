@@ -849,8 +849,12 @@ export default function ChatMessage({
           {initials}
         </div>
       ) : (
-        <div className="flex-shrink-0 w-8 h-8 rounded-full overflow-hidden bg-gray-200 mb-1 border border-[#e8dfd4] shadow-sm">
-          {avatar ? (
+        <div className="flex-shrink-0 w-8 h-8 rounded-full overflow-hidden bg-gray-900 mb-1 border border-white shadow-sm flex items-center justify-center">
+          {avatar === 'support' ? (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#F7931A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5 text-orange-500">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            </svg>
+          ) : avatar ? (
             <img src={avatar} alt="avatar" className="w-full h-full object-cover" />
           ) : (
             <div className="w-full h-full bg-[#e8dfd4] flex items-center justify-center text-[#8C4F00] text-xs font-bold font-serif italic">

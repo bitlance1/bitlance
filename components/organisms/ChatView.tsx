@@ -2529,6 +2529,8 @@ interface ChatViewProps {
   jobTitle?: string;
   contractId?: string;
   viewerRole_disputeRole?: 'client' | 'freelancer';
+  isAdminOutreach?: boolean;
+  subject?: string;
 }
 
 export default function ChatView({
@@ -2565,6 +2567,8 @@ export default function ChatView({
   jobTitle,
   contractId,
   viewerRole_disputeRole,
+  isAdminOutreach = false,
+  subject,
 }: ChatViewProps) {
   const [newMessage, setNewMessage] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -3007,9 +3011,14 @@ export default function ChatView({
     <div className="flex h-full min-h-0 flex-col bg-[#FCF9F7CC]">
       {/* Header */}
       <ChatHeader
-        sender={message.sender}
+        sender={isAdminOutreach ? {
+          name: subject || 'Bitlance Support',
+          avatar: 'support',
+          isOnline: false
+        } : message.sender}
+        subtext={isAdminOutreach ? 'Bitlance Support Team' : undefined}
         onBack={onBack}
-        onViewJobDetails={() => {
+        onViewJobDetails={isAdminOutreach ? undefined : () => {
           if (!jobId) return;
           setLoadingJob(true);
           const loadJob = async () => {
@@ -3029,7 +3038,7 @@ export default function ChatView({
           };
           void loadJob();
         }}
-        onRaiseDispute={() => setIsDisputeModalOpen(true)}
+        onRaiseDispute={isAdminOutreach ? undefined : () => setIsDisputeModalOpen(true)}
       />
 
       {/* Job Details Modal */}
@@ -3128,6 +3137,7 @@ export default function ChatView({
         </div>
       )}
 
+      {!isAdminOutreach && (
       <div className="border-b border-[#e8e6e1] bg-white px-3 py-2 sm:px-5">
         <div className="grid grid-cols-2 gap-2">
 
@@ -3558,6 +3568,7 @@ export default function ChatView({
           )}
         </div>
       </div>
+      )}
 
       {/* Messages */}
       <div className="min-h-0 flex-1 overflow-y-auto px-1 py-3 sm:px-5 sm:py-6">

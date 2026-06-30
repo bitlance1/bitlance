@@ -80,6 +80,7 @@ type JobFeedItem = {
   category?: string;
   companyLogo?: string;
   duration?: string;
+  rawCreatedAt?: any;
 };
 
 // ─── Company logo component (mirrors ClientJobPostCard logic) ─────────────────
@@ -195,8 +196,11 @@ export default function JobFeedContent() {
               category: data.category ?? '',
               companyLogo: data.companyLogo || logoMap[clientId] || '',
               duration: data.duration ?? '',
+              rawCreatedAt: data.createdAt,
             };
           });
+
+          items.sort((a, b) => getTimestampMs(b.rawCreatedAt) - getTimestampMs(a.rawCreatedAt));
 
           setJobs(items);
           setErrorMessage('');

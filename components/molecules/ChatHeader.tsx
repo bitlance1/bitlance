@@ -14,11 +14,13 @@ interface ChatHeaderProps {
   onBack: () => void;
   onViewJobDetails?: () => void;
   onRaiseDispute?: () => void;
+  subtext?: string;
 }
 
-export default function ChatHeader({ sender, onBack, onViewJobDetails, onRaiseDispute }: ChatHeaderProps) {
+export default function ChatHeader({ sender, onBack, onViewJobDetails, onRaiseDispute, subtext }: ChatHeaderProps) {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [imgError, setImgError] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -45,27 +47,31 @@ export default function ChatHeader({ sender, onBack, onViewJobDetails, onRaiseDi
       </button>
 
       <div className="relative">
-        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-[#e8dfd4] flex items-center justify-center overflow-hidden border-2 border-white shadow-sm">
-          <img
-            src={sender.avatar}
-            alt={sender.name}
-            className="w-full h-full object-cover"
-            onError={(e) => {
-              const target = e.target as HTMLImageElement;
-              target.style.display = 'none';
-              target.parentElement!.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8C4F00" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>';
-            }}
-          />
+        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gray-900 flex items-center justify-center overflow-hidden border-2 border-white shadow-sm">
+          {sender.avatar === 'support' ? (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F7931A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4.5 w-4.5 text-orange-500">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            </svg>
+          ) : imgError || !sender.avatar ? (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8C4F00" strokeWidth="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+          ) : (
+            <img
+              src={sender.avatar}
+              alt={sender.name}
+              className="w-full h-full object-cover"
+              onError={() => setImgError(true)}
+            />
+          )}
         </div>
-        {sender.isOnline && (
+        {sender.isOnline && sender.avatar !== 'support' && (
           <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 sm:w-3 sm:h-3 bg-green-500 border-2 border-white rounded-full"></div>
         )}
       </div>
 
       <div className="flex flex-col min-w-0">
         <h2 className="font-bold text-[#1a1a1a] truncate text-sm sm:text-base leading-tight">{sender.name}</h2>
-        <span className={`text-xs font-medium leading-none ${sender.isOnline ? 'text-green-500' : 'text-gray-400'}`}>
-          {sender.isOnline ? 'Online' : 'Offline'}
+        <span className={`text-xs font-medium leading-none ${subtext ? 'text-gray-400' : sender.isOnline ? 'text-green-500' : 'text-gray-400'}`}>
+          {subtext || (sender.isOnline ? 'Online' : 'Offline')}
         </span>
       </div>
 

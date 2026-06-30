@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { X, Zap, Clock, UploadCloud } from "lucide-react";
 import Button from "@/components/atoms/Button";
 import ClientJobPostCard from "@/components/molecules/ClientJobPostCard";
 import ClientProposalCard from "@/components/molecules/ClientProposalCard";
@@ -106,13 +107,13 @@ export default function ClientJobPostsContent() {
   const [editCategory, setEditCategory] = useState("");
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editJobId, setEditJobId] = useState<string | null>(null);
-  const [showToast, setShowToast] = useState<{ show: boolean; message: string }>({ show: false, message: "" });
+  const [showToast, setShowToast] = useState<{ show: boolean; message: string; type: "success" | "error" }>({ show: false, message: "", type: "success" });
   const [deleteJobId, setDeleteJobId] = useState<string | null>(null);
   const [isDeletingJob, setIsDeletingJob] = useState(false);
 
-  const triggerToast = (message: string) => {
-    setShowToast({ show: true, message });
-    setTimeout(() => setShowToast({ show: false, message: "" }), 3000);
+  const triggerToast = (message: string, type: "success" | "error" = "success") => {
+    setShowToast({ show: true, message, type });
+    setTimeout(() => setShowToast({ show: false, message: "", type: "success" }), 3500);
   };
 
   const handleDeleteJob = async () => {
@@ -122,9 +123,8 @@ export default function ClientJobPostsContent() {
       await deleteDoc(doc(firebaseDb, "jobs", deleteJobId));
       if (selectedJobId === deleteJobId) setSelectedJobId("");
       setDeleteJobId(null);
-      triggerToast("Job post deleted.");
     } catch {
-      triggerToast("Failed to delete job post. Please try again.");
+      triggerToast("Failed to delete job post. Please try again.", "error");
     } finally {
       setIsDeletingJob(false);
     }
@@ -177,7 +177,7 @@ export default function ClientJobPostsContent() {
       const companyLogo = await uploadCompanyLogo(file);
       setPostCompanyLogo(companyLogo);
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Could not upload company logo. Please retry.");
+      triggerToast(error instanceof Error ? error.message : "Could not upload company logo. Please retry.", "error");
     } finally {
       setPostCompanyLogoUploading(false);
       event.target.value = "";
@@ -193,7 +193,7 @@ export default function ClientJobPostsContent() {
       const companyLogo = await uploadCompanyLogo(file);
       setEditCompanyLogo(companyLogo);
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Could not upload company logo. Please retry.");
+      triggerToast(error instanceof Error ? error.message : "Could not upload company logo. Please retry.", "error");
     } finally {
       setEditCompanyLogoUploading(false);
       event.target.value = "";
@@ -825,83 +825,123 @@ export default function ClientJobPostsContent() {
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             onClick={() => setIsEditModalOpen(false)}
           />
-          <div className="relative z-[91] w-full max-w-3xl max-h-[85vh] overflow-y-auto rounded-[16px] border border-[#EAE7E2] bg-white p-6 shadow-[0_20px_50px_rgba(0,0,0,0.2)]">
-            <button
-              type="button"
-              onClick={() => setIsEditModalOpen(false)}
-              aria-label="Close"
-              className="absolute right-4 top-4 rounded-full border border-[#EAE7E2] bg-white p-2 text-[#6b6762] hover:bg-[#F7F4F0]"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-
-            <div className="mb-5">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#8C4F00]">
+          <div className="relative z-[91] w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-lg border border-zinc-200 bg-white shadow-[0_20px_50px_rgba(0,0,0,0.15)] flex flex-col">
+            
+            {/* Header */}
+            <div className="p-6 pb-4 relative">
+              <button
+                type="button"
+                onClick={() => setIsEditModalOpen(false)}
+                aria-label="Close"
+                className="absolute right-6 top-6 text-zinc-400 hover:text-zinc-600 transition cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-[#F7931A] mb-1">
                 Edit Job
               </div>
-              <h2 className="mt-2 text-[20px] font-semibold text-[#1a1a1a]">Update job details</h2>
-              <p className="mt-1 text-[12px] text-[#6b6762]">
+              <h2 className="text-xl font-bold text-zinc-900">Update job details</h2>
+              <p className="text-xs text-zinc-500 mt-1">
                 Make changes to your job post and save them.
               </p>
             </div>
+            
+            <div className="border-t border-zinc-100" />
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="flex flex-col gap-2 md:col-span-2">
-                <label className="text-[11px] uppercase tracking-[0.12em] text-[#9e9690]">Job Title</label>
+            {/* Form Fields */}
+            <div className="p-6 space-y-4 overflow-y-auto flex-1">
+              {/* Job Title */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-zinc-700">Job Title</label>
                 <input
                   value={editTitle}
                   onChange={(e) => setEditTitle(e.target.value)}
-                  className="rounded-lg border border-[#EAE7E2] px-3 py-2 text-[12px] focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  className="w-full rounded-[6px] border border-zinc-200 px-3 py-2 text-xs focus:outline-none focus:border-[#F7931A] focus:ring-1 focus:ring-[#F7931A] bg-[#FAF9F6] text-zinc-900 placeholder-zinc-400"
                 />
               </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-[11px] uppercase tracking-[0.12em] text-[#9e9690]">Category</label>
+
+              {/* Category & Job Type */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-zinc-700">Category</label>
+                  <select
+                    value={editCategory}
+                    onChange={(e) => setEditCategory(e.target.value)}
+                    className="w-full rounded-[6px] border border-zinc-200 px-3 py-2 text-xs focus:outline-none focus:border-[#F7931A] focus:ring-1 focus:ring-[#F7931A] bg-[#FAF9F6] text-zinc-900"
+                  >
+                    <option value="">Select a category</option>
+                    {JOB_CATEGORIES.map((category) => (
+                      <option key={category} value={category}>
+                        {category}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-zinc-700">Job Type</label>
+                  <select
+                    value={editType}
+                    onChange={(e) => setEditType(e.target.value)}
+                    className="w-full rounded-[6px] border border-zinc-200 px-3 py-2 text-xs focus:outline-none focus:border-[#F7931A] focus:ring-1 focus:ring-[#F7931A] bg-[#FAF9F6] text-zinc-900"
+                  >
+                    <option value="Fixed Price">Fixed Price</option>
+                    <option value="Hourly">Hourly</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Budget & Duration */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-zinc-700">Budget</label>
+                  <div className="relative flex items-center">
+                    <input
+                      value={editBudget}
+                      onChange={(e) => setEditBudget(e.target.value)}
+                      className="w-full rounded-[6px] border border-zinc-200 pl-3 pr-10 py-2 text-xs focus:outline-none focus:border-[#F7931A] focus:ring-1 focus:ring-[#F7931A] bg-[#FAF9F6] text-zinc-900 placeholder-zinc-400"
+                    />
+                    <span className="absolute right-3 text-[10px] font-semibold text-zinc-500">sats</span>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-zinc-700">Duration</label>
+                  <input
+                    value={editDuration}
+                    onChange={(e) => setEditDuration(e.target.value)}
+                    className="w-full rounded-[6px] border border-zinc-200 px-3 py-2 text-xs focus:outline-none focus:border-[#F7931A] focus:ring-1 focus:ring-[#F7931A] bg-[#FAF9F6] text-zinc-900 placeholder-zinc-400"
+                    placeholder="e.g. 4 weeks"
+                  />
+                </div>
+              </div>
+
+              {/* Status */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-zinc-700">Status</label>
                 <select
-                  value={editCategory}
-                  onChange={(e) => setEditCategory(e.target.value)}
-                  className="rounded-lg border border-[#EAE7E2] px-3 py-2 text-[12px] focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  value={editStatus}
+                  onChange={(e) => setEditStatus(e.target.value as JobStatus)}
+                  className="w-full rounded-[6px] border border-zinc-200 px-3 py-2 text-xs focus:outline-none focus:border-[#F7931A] focus:ring-1 focus:ring-[#F7931A] bg-[#FAF9F6] text-zinc-900"
                 >
-                  <option value="">Select a category</option>
-                  {JOB_CATEGORIES.map((category) => (
-                    <option key={category} value={category}>
-                      {category}
-                    </option>
-                  ))}
+                  <option value="Open">Open</option>
+                  <option value="In Review">In Review</option>
+                  <option value="Paused">Paused</option>
                 </select>
               </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-[11px] uppercase tracking-[0.12em] text-[#9e9690]">Budget</label>
-                <input
-                  value={editBudget}
-                  onChange={(e) => setEditBudget(e.target.value)}
-                  className="rounded-lg border border-[#EAE7E2] px-3 py-2 text-[12px] focus:outline-none focus:ring-2 focus:ring-orange-400"
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-[11px] uppercase tracking-[0.12em] text-[#9e9690]">Duration</label>
-                <input
-                  value={editDuration}
-                  onChange={(e) => setEditDuration(e.target.value)}
-                  className="rounded-lg border border-[#EAE7E2] px-3 py-2 text-[12px] focus:outline-none focus:ring-2 focus:ring-orange-400"
-                  placeholder="e.g. 4 weeks"
-                />
-              </div>
-              <div className="flex flex-col gap-2 md:col-span-2">
-                <label className="text-[11px] uppercase tracking-[0.12em] text-[#9e9690]">Company Logo</label>
-                <div className="flex flex-col gap-3 rounded-lg border border-[#EAE7E2] px-3 py-3 sm:flex-row sm:items-center">
-                  <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-[8px] bg-[#F7F4F0] ring-1 ring-[#EAE7E2]">
+
+              {/* Company Logo */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-zinc-700">Company Logo</label>
+                <div className="flex items-center gap-4 rounded-md border border-zinc-200 bg-[#FAF9F6] p-3">
+                  <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded border border-zinc-200 bg-white flex-shrink-0">
                     {editCompanyLogo ? (
                       <img src={editCompanyLogo} alt="Company logo preview" className="h-full w-full object-cover" />
                     ) : (
-                      <span className="text-[10px] font-semibold uppercase text-[#8C4F00]">Logo</span>
+                      <UploadCloud className="h-5 w-5 text-zinc-400" />
                     )}
                   </div>
                   <div className="flex-1">
-                    <label className="inline-flex cursor-pointer items-center rounded-full border border-[#EAE7E2] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-[#6b6762] hover:bg-[#F7F4F0]">
-                      {editCompanyLogoUploading ? "Uploading..." : editCompanyLogo ? "Change Logo" : "Upload Logo"}
+                    <label className="inline-flex cursor-pointer items-center rounded border border-zinc-300 bg-white px-3 py-1.5 text-[10px] font-semibold text-zinc-700 hover:bg-zinc-50 transition">
+                      {editCompanyLogoUploading ? "Uploading..." : "Upload Logo"}
                       <input
                         type="file"
                         accept="image/png,image/jpeg,image/webp"
@@ -910,33 +950,26 @@ export default function ClientJobPostsContent() {
                         disabled={editCompanyLogoUploading}
                       />
                     </label>
-                    <p className="mt-2 text-[10px] text-[#9e9690]">JPG, PNG, or WEBP. Max 2MB.</p>
+                    <span className="ml-2.5 text-[10px] text-zinc-400">JPG, PNG, or WEBP. Max 2MB.</span>
                   </div>
                 </div>
               </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-[11px] uppercase tracking-[0.12em] text-[#9e9690]">Job Type</label>
-                <select
-                  value={editType}
-                  onChange={(e) => setEditType(e.target.value)}
-                  className="rounded-lg border border-[#EAE7E2] px-3 py-2 text-[12px] focus:outline-none focus:ring-2 focus:ring-orange-400"
-                >
-                  <option>Fixed Price</option>
-                  <option>Hourly</option>
-                </select>
-              </div>
-              <div className="flex flex-col gap-2 md:col-span-2">
-                <label className="text-[11px] uppercase tracking-[0.12em] text-[#9e9690]">Description</label>
+
+              {/* Description */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-zinc-700">Description</label>
                 <textarea
                   rows={4}
                   value={editDescription}
                   onChange={(e) => setEditDescription(e.target.value)}
-                  className="rounded-lg border border-[#EAE7E2] px-3 py-2 text-[12px] focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  className="w-full rounded-[6px] border border-zinc-200 px-3 py-2 text-xs focus:outline-none focus:border-[#F7931A] focus:ring-1 focus:ring-[#F7931A] bg-[#FAF9F6] text-zinc-900 placeholder-zinc-400"
                 />
               </div>
-              <div className="flex flex-col gap-2 md:col-span-2">
-                <label className="text-[11px] uppercase tracking-[0.12em] text-[#9e9690]">Skills</label>
-                <div className="rounded-lg border border-[#EAE7E2] px-3 py-2">
+
+              {/* Skills */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-zinc-700">Skills</label>
+                <div className="rounded-[6px] border border-zinc-200 bg-[#FAF9F6] p-2 focus-within:bg-white focus-within:border-[#F7931A] transition">
                   <input
                     value={editSkillInput}
                     onChange={(e) => setEditSkillInput(e.target.value)}
@@ -952,91 +985,85 @@ export default function ClientJobPostsContent() {
                         setEditSkills((prev) => prev.slice(0, -1));
                       }
                     }}
-                    className="w-full bg-transparent text-[12px] focus:outline-none"
+                    className="w-full bg-transparent text-xs text-zinc-900 focus:outline-none"
                     placeholder="Type a skill and press Enter"
                   />
                   {editSkills.length ? (
-                    <div className="mt-2 flex flex-wrap gap-2">
+                    <div className="mt-2 flex flex-wrap gap-1.5">
                       {editSkills.map((skill) => (
                         <span
                           key={skill}
-                          className="inline-flex items-center gap-2 rounded-full bg-[#F6F3F1] px-3 py-1 text-[10px] font-semibold uppercase text-[#666]"
+                          className="inline-flex items-center gap-1 rounded bg-zinc-200/60 text-zinc-700 px-2 py-0.5 text-[10px] font-semibold border border-zinc-300/40"
                         >
                           {skill}
                           <button
                             type="button"
                             onClick={() => setEditSkills((prev) => prev.filter((s) => s !== skill))}
-                            className="text-[#9e9690] hover:text-[#1a1a1a]"
-                            aria-label={`Remove ${skill}`}
+                            className="text-zinc-400 hover:text-zinc-600 cursor-pointer"
                           >
-                            x
+                            <X className="h-2.5 w-2.5" />
                           </button>
                         </span>
                       ))}
                     </div>
                   ) : null}
                 </div>
-                <p className="text-[10px] text-[#9e9690]">Press Enter or comma to add a skill.</p>
               </div>
-              <div className="flex items-center justify-between gap-3 md:col-span-2 rounded-lg border border-[#EAE7E2] px-4 py-3">
+
+              {/* Urgent */}
+              <div className="flex items-center justify-between p-3 rounded-md border border-zinc-200 bg-[#FAF9F6]">
                 <div>
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#9e9690]">Urgent</div>
-                  <div className="text-[12px] text-[#6b6762]">Mark this job as high priority.</div>
+                  <div className="text-xs font-semibold text-zinc-700">Urgent</div>
+                  <div className="text-[10px] text-zinc-500 font-semibold mt-0.5">Mark this job as high priority.</div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setEditUrgent((v) => !v)}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${editUrgent ? "bg-orange-500" : "bg-[#EAE7E2]"
-                    }`}
-                  aria-pressed={editUrgent}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors cursor-pointer ${
+                    editUrgent ? "bg-[#F7931A]" : "bg-zinc-200"
+                  }`}
                 >
                   <span
-                    className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${editUrgent ? "translate-x-5" : "translate-x-1"
-                      }`}
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      editUrgent ? "translate-x-4" : "translate-x-0.5"
+                    }`}
                   />
                 </button>
               </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-[11px] uppercase tracking-[0.12em] text-[#9e9690]">Status</label>
-                <select
-                  value={editStatus}
-                  onChange={(e) => setEditStatus(e.target.value as JobStatus)}
-                  className="rounded-lg border border-[#EAE7E2] px-3 py-2 text-[12px] focus:outline-none focus:ring-2 focus:ring-orange-400"
-                >
-                  <option value="Open">Open</option>
-                  <option value="In Review">In Review</option>
-                  <option value="Paused">Paused</option>
-                </select>
-              </div>
             </div>
 
-            <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
-              <Button size="sm" variant="outline" className="rounded-full w-full sm:w-auto" onClick={() => setIsEditModalOpen(false)}>
+            <div className="border-t border-zinc-100" />
+
+            {/* Footer Buttons */}
+            <div className="p-4 bg-white flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setIsEditModalOpen(false)}
+                className="px-5 py-2 border border-zinc-300 text-zinc-700 bg-white hover:bg-zinc-50 rounded-md text-xs font-semibold transition cursor-pointer"
+              >
                 Cancel
-              </Button>
-              <Button
-                size="sm"
-                className="rounded-full w-full sm:w-auto"
+              </button>
+              <button
+                type="button"
                 onClick={async () => {
-                  if (!editJob?.id) return;
                   if (!editTitle.trim() || editTitle.trim().length < 3) {
-                    alert("Please enter a job title (at least 3 characters).");
+                    triggerToast("Please enter a job title (at least 3 characters).", "error");
                     return;
                   }
                   if (!editBudget.trim()) {
-                    alert("Please enter a budget.");
+                    triggerToast("Please enter a budget.", "error");
                     return;
                   }
                   if (!editDuration.trim()) {
-                    alert("Please enter a duration.");
+                    triggerToast("Please enter a duration.", "error");
                     return;
                   }
                   if (!editCompanyLogo.trim()) {
-                    alert("Please upload a company logo.");
+                    triggerToast("Please upload a company logo.", "error");
                     return;
                   }
                   if (!editDescription.trim() || editDescription.trim().length < 20) {
-                    alert("Please write a description (at least 20 characters).");
+                    triggerToast("Please write a description (at least 20 characters).", "error");
                     return;
                   }
                   setIsSavingEdit(true);
@@ -1060,9 +1087,10 @@ export default function ClientJobPostsContent() {
                   }
                 }}
                 disabled={isSavingEdit || editCompanyLogoUploading}
+                className="px-5 py-2 bg-[#F7931A] hover:bg-[#e07f0f] text-white font-bold text-xs rounded-md shadow-sm hover:shadow transition disabled:bg-gray-400 disabled:cursor-not-allowed cursor-pointer"
               >
-                {isSavingEdit ? "Saving..." : editCompanyLogoUploading ? "Uploading Logo..." : "Save Changes"}
-              </Button>
+                {isSavingEdit ? "Saving..." : "Save Changes"}
+              </button>
             </div>
           </div>
         </div>
@@ -1074,85 +1102,111 @@ export default function ClientJobPostsContent() {
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             onClick={() => setIsPostModalOpen(false)}
           />
-          <div className="relative z-[81] w-full max-w-3xl max-h-[85vh] overflow-y-auto rounded-[16px] border border-[#EAE7E2] bg-white p-6 shadow-[0_20px_50px_rgba(0,0,0,0.2)]">
-            <button
-              type="button"
-              onClick={() => setIsPostModalOpen(false)}
-              aria-label="Close"
-              className="absolute right-4 top-4 rounded-full border border-[#EAE7E2] bg-white p-2 text-[#6b6762] hover:bg-[#F7F4F0]"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-
-            <div className="mb-5">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#8C4F00]">
+          <div className="relative z-[81] w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-lg border border-zinc-200 bg-white shadow-[0_20px_50px_rgba(0,0,0,0.15)] flex flex-col">
+            
+            {/* Header */}
+            <div className="p-6 pb-4 relative">
+              <button
+                type="button"
+                onClick={() => setIsPostModalOpen(false)}
+                aria-label="Close"
+                className="absolute right-6 top-6 text-zinc-400 hover:text-zinc-600 transition cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-[#F7931A] mb-1">
                 Post a Job
               </div>
-              <h2 className="mt-2 text-[20px] font-semibold text-[#1a1a1a]">Create a new job post</h2>
-              <p className="mt-1 text-[12px] text-[#6b6762]">
+              <h2 className="text-xl font-bold text-zinc-900">Create a new job post</h2>
+              <p className="text-xs text-zinc-500 mt-1">
                 Share the role details and the right freelancers will apply.
               </p>
             </div>
+            
+            <div className="border-t border-zinc-100" />
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="flex flex-col gap-2 md:col-span-2">
-                <label className="text-[11px] uppercase tracking-[0.12em] text-[#9e9690]">Job Title</label>
+            {/* Form Fields */}
+            <div className="p-6 space-y-4 overflow-y-auto flex-1">
+              {/* Job Title */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-zinc-700">Job Title</label>
                 <input
                   value={postTitle}
                   onChange={(e) => setPostTitle(e.target.value)}
-                  className="rounded-lg border border-[#EAE7E2] px-3 py-2 text-[12px] focus:outline-none focus:ring-2 focus:ring-orange-400"
-                  placeholder="e.g. Lightning Node Observability Suite"
+                  className="w-full rounded-[6px] border border-zinc-200 px-3 py-2 text-xs focus:outline-none focus:border-[#F7931A] focus:ring-1 focus:ring-[#F7931A] bg-[#FAF9F6] text-zinc-900 placeholder-zinc-400"
+                  placeholder="e.g. Senior Smart Contract Engineer"
                 />
               </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-[11px] uppercase tracking-[0.12em] text-[#9e9690]">Category</label>
-                <select
-                  value={postCategory}
-                  onChange={(e) => setPostCategory(e.target.value)}
-                  className="rounded-lg border border-[#EAE7E2] px-3 py-2 text-[12px] focus:outline-none focus:ring-2 focus:ring-orange-400"
-                >
-                  <option value="">Select a category</option>
-                  {JOB_CATEGORIES.map((category) => (
-                    <option key={category} value={category}>
-                      {category}
-                    </option>
-                  ))}
-                </select>
+
+              {/* Category & Job Type */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-zinc-700">Category</label>
+                  <select
+                    value={postCategory}
+                    onChange={(e) => setPostCategory(e.target.value)}
+                    className="w-full rounded-[6px] border border-zinc-200 px-3 py-2 text-xs focus:outline-none focus:border-[#F7931A] focus:ring-1 focus:ring-[#F7931A] bg-[#FAF9F6] text-zinc-900"
+                  >
+                    <option value="">Select a category</option>
+                    {JOB_CATEGORIES.map((category) => (
+                      <option key={category} value={category}>
+                        {category}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-zinc-700">Job Type</label>
+                  <select
+                    value={postType}
+                    onChange={(e) => setPostType(e.target.value)}
+                    className="w-full rounded-[6px] border border-zinc-200 px-3 py-2 text-xs focus:outline-none focus:border-[#F7931A] focus:ring-1 focus:ring-[#F7931A] bg-[#FAF9F6] text-zinc-900"
+                  >
+                    <option value="Fixed Price">Fixed Price</option>
+                    <option value="Hourly">Hourly</option>
+                  </select>
+                </div>
               </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-[11px] uppercase tracking-[0.12em] text-[#9e9690]">Budget</label>
-                <input
-                  value={postBudget}
-                  onChange={(e) => setPostBudget(e.target.value)}
-                  className="rounded-lg border border-[#EAE7E2] px-3 py-2 text-[12px] focus:outline-none focus:ring-2 focus:ring-orange-400"
-                  placeholder="450,000 sats"
-                />
+
+              {/* Budget & Duration */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-zinc-700">Budget</label>
+                  <div className="relative flex items-center">
+                    <input
+                      value={postBudget}
+                      onChange={(e) => setPostBudget(e.target.value)}
+                      className="w-full rounded-[6px] border border-zinc-200 pl-3 pr-10 py-2 text-xs focus:outline-none focus:border-[#F7931A] focus:ring-1 focus:ring-[#F7931A] bg-[#FAF9F6] text-zinc-900 placeholder-zinc-400"
+                      placeholder="450,000"
+                    />
+                    <span className="absolute right-3 text-[10px] font-semibold text-zinc-500">sats</span>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-zinc-700">Duration</label>
+                  <input
+                    value={postDuration}
+                    onChange={(e) => setPostDuration(e.target.value)}
+                    className="w-full rounded-[6px] border border-zinc-200 px-3 py-2 text-xs focus:outline-none focus:border-[#F7931A] focus:ring-1 focus:ring-[#F7931A] bg-[#FAF9F6] text-zinc-900 placeholder-zinc-400"
+                    placeholder="e.g. 4 weeks"
+                  />
+                </div>
               </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-[11px] uppercase tracking-[0.12em] text-[#9e9690]">Duration</label>
-                <input
-                  value={postDuration}
-                  onChange={(e) => setPostDuration(e.target.value)}
-                  className="rounded-lg border border-[#EAE7E2] px-3 py-2 text-[12px] focus:outline-none focus:ring-2 focus:ring-orange-400"
-                  placeholder="e.g. 4 weeks"
-                />
-              </div>
-              <div className="flex flex-col gap-2 md:col-span-2">
-                <label className="text-[11px] uppercase tracking-[0.12em] text-[#9e9690]">Company Logo</label>
-                <div className="flex flex-col gap-3 rounded-lg border border-[#EAE7E2] px-3 py-3 sm:flex-row sm:items-center">
-                  <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-[8px] bg-[#F7F4F0] ring-1 ring-[#EAE7E2]">
+
+              {/* Company Logo */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-zinc-700">Company Logo</label>
+                <div className="flex items-center gap-4 rounded-md border border-zinc-200 bg-[#FAF9F6] p-3">
+                  <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded border border-zinc-200 bg-white flex-shrink-0">
                     {postCompanyLogo ? (
                       <img src={postCompanyLogo} alt="Company logo preview" className="h-full w-full object-cover" />
                     ) : (
-                      <span className="text-[10px] font-semibold uppercase text-[#8C4F00]">Logo</span>
+                      <UploadCloud className="h-5 w-5 text-zinc-400" />
                     )}
                   </div>
                   <div className="flex-1">
-                    <label className="inline-flex cursor-pointer items-center rounded-full border border-[#EAE7E2] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-[#6b6762] hover:bg-[#F7F4F0]">
-                      {postCompanyLogoUploading ? "Uploading..." : postCompanyLogo ? "Change Logo" : "Upload Logo"}
+                    <label className="inline-flex cursor-pointer items-center rounded border border-zinc-300 bg-white px-3 py-1.5 text-[10px] font-semibold text-zinc-700 hover:bg-zinc-50 transition">
+                      {postCompanyLogoUploading ? "Uploading..." : "Upload Logo"}
                       <input
                         type="file"
                         accept="image/png,image/jpeg,image/webp"
@@ -1161,34 +1215,27 @@ export default function ClientJobPostsContent() {
                         disabled={postCompanyLogoUploading}
                       />
                     </label>
-                    <p className="mt-2 text-[10px] text-[#9e9690]">JPG, PNG, or WEBP. Max 2MB.</p>
+                    <span className="ml-2.5 text-[10px] text-zinc-400">JPG, PNG, or WEBP. Max 2MB.</span>
                   </div>
                 </div>
               </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-[11px] uppercase tracking-[0.12em] text-[#9e9690]">Job Type</label>
-                <select
-                  value={postType}
-                  onChange={(e) => setPostType(e.target.value)}
-                  className="rounded-lg border border-[#EAE7E2] px-3 py-2 text-[12px] focus:outline-none focus:ring-2 focus:ring-orange-400"
-                >
-                  <option>Fixed Price</option>
-                  <option>Hourly</option>
-                </select>
-              </div>
-              <div className="flex flex-col gap-2 md:col-span-2">
-                <label className="text-[11px] uppercase tracking-[0.12em] text-[#9e9690]">Description</label>
+
+              {/* Description */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-zinc-700">Description</label>
                 <textarea
                   rows={4}
                   value={postDescription}
                   onChange={(e) => setPostDescription(e.target.value)}
-                  className="rounded-lg border border-[#EAE7E2] px-3 py-2 text-[12px] focus:outline-none focus:ring-2 focus:ring-orange-400"
-                  placeholder="Describe the scope, goals, and deliverables."
+                  className="w-full rounded-[6px] border border-zinc-200 px-3 py-2 text-xs focus:outline-none focus:border-[#F7931A] focus:ring-1 focus:ring-[#F7931A] bg-[#FAF9F6] text-zinc-900 placeholder-zinc-400"
+                  placeholder="Describe the scope, goals, and deliverables in detail..."
                 />
               </div>
-              <div className="flex flex-col gap-2 md:col-span-2">
-                <label className="text-[11px] uppercase tracking-[0.12em] text-[#9e9690]">Skills</label>
-                <div className="rounded-lg border border-[#EAE7E2] px-3 py-2">
+
+              {/* Skills */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-zinc-700">Skills</label>
+                <div className="rounded-[6px] border border-zinc-200 bg-[#FAF9F6] p-2 focus-within:bg-white focus-within:border-[#F7931A] transition">
                   <input
                     value={skillInput}
                     onChange={(e) => setSkillInput(e.target.value)}
@@ -1206,80 +1253,85 @@ export default function ClientJobPostsContent() {
                         setPostSkills((prev) => prev.slice(0, -1));
                       }
                     }}
-                    className="w-full bg-transparent text-[12px] focus:outline-none"
+                    className="w-full bg-transparent text-xs text-zinc-900 focus:outline-none"
                     placeholder="Type a skill and press Enter"
                   />
                   {postSkills.length ? (
-                    <div className="mt-2 flex flex-wrap gap-2">
+                    <div className="mt-2 flex flex-wrap gap-1.5">
                       {postSkills.map((skill) => (
                         <span
                           key={skill}
-                          className="inline-flex items-center gap-2 rounded-full bg-[#F6F3F1] px-3 py-1 text-[10px] font-semibold uppercase text-[#666]"
+                          className="inline-flex items-center gap-1 rounded bg-zinc-200/60 text-zinc-700 px-2 py-0.5 text-[10px] font-semibold border border-zinc-300/40"
                         >
                           {skill}
                           <button
                             type="button"
                             onClick={() => setPostSkills((prev) => prev.filter((s) => s !== skill))}
-                            className="text-[#9e9690] hover:text-[#1a1a1a]"
-                            aria-label={`Remove ${skill}`}
+                            className="text-zinc-400 hover:text-zinc-600 cursor-pointer"
                           >
-                            x
+                            <X className="h-2.5 w-2.5" />
                           </button>
                         </span>
                       ))}
                     </div>
                   ) : null}
                 </div>
-                <p className="text-[10px] text-[#9e9690]">
-                  Press Enter or comma to add a skill.
-                </p>
               </div>
-              <div className="flex items-center justify-between gap-3 md:col-span-2 rounded-lg border border-[#EAE7E2] px-4 py-3">
+
+              {/* Urgent */}
+              <div className="flex items-center justify-between p-3 rounded-md border border-zinc-200 bg-[#FAF9F6]">
                 <div>
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#9e9690]">Urgent</div>
-                  <div className="text-[12px] text-[#6b6762]">Mark this job as high priority.</div>
+                  <div className="text-xs font-semibold text-zinc-700">Urgent</div>
+                  <div className="text-[10px] text-zinc-500 mt-0.5">Mark this job as high priority.</div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setPostUrgent((v) => !v)}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${postUrgent ? "bg-orange-500" : "bg-[#EAE7E2]"
-                    }`}
-                  aria-pressed={postUrgent}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors cursor-pointer ${
+                    postUrgent ? "bg-[#F7931A]" : "bg-zinc-200"
+                  }`}
                 >
                   <span
-                    className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${postUrgent ? "translate-x-5" : "translate-x-1"
-                      }`}
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      postUrgent ? "translate-x-4" : "translate-x-0.5"
+                    }`}
                   />
                 </button>
               </div>
             </div>
 
-            <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
-              <Button size="sm" variant="outline" className="rounded-full w-full sm:w-auto">
-                Save Draft
-              </Button>
-              <Button
-                size="sm"
-                className="rounded-full w-full sm:w-auto"
+            <div className="border-t border-zinc-100" />
+
+            {/* Footer Buttons */}
+            <div className="p-4 bg-white flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setIsPostModalOpen(false)}
+                className="px-5 py-2 border border-zinc-300 text-zinc-700 bg-white hover:bg-zinc-50 rounded-md text-xs font-semibold transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
                 onClick={async () => {
                   if (!postTitle.trim() || postTitle.trim().length < 3) {
-                    alert("Please enter a job title (at least 3 characters).");
+                    triggerToast("Please enter a job title (at least 3 characters).", "error");
                     return;
                   }
                   if (!postBudget.trim()) {
-                    alert("Please enter a budget.");
+                    triggerToast("Please enter a budget.", "error");
                     return;
                   }
                   if (!postDuration.trim()) {
-                    alert("Please enter a duration.");
+                    triggerToast("Please enter a duration.", "error");
                     return;
                   }
                   if (!postCompanyLogo.trim() && !clientCompanyLogoUrl) {
-                    alert("Please upload a company logo.");
+                    triggerToast("Please upload a company logo.", "error");
                     return;
                   }
                   if (!postDescription.trim() || postDescription.trim().length < 20) {
-                    alert("Please write a description (at least 20 characters).");
+                    triggerToast("Please write a description (at least 20 characters).", "error");
                     return;
                   }
                   const user = firebaseAuth.currentUser;
@@ -1346,9 +1398,10 @@ export default function ClientJobPostsContent() {
                   }
                 }}
                 disabled={isPublishing || postCompanyLogoUploading}
+                className="px-5 py-2 bg-[#F7931A] hover:bg-[#e07f0f] text-white font-bold text-xs rounded-md shadow-sm hover:shadow transition disabled:bg-gray-400 disabled:cursor-not-allowed cursor-pointer"
               >
-                {isPublishing ? "Publishing..." : postCompanyLogoUploading ? "Uploading Logo..." : "Publish Job"}
-              </Button>
+                {isPublishing ? "Publishing..." : "Publish Job"}
+              </button>
             </div>
           </div>
         </div>
@@ -1357,10 +1410,14 @@ export default function ClientJobPostsContent() {
       {showToast.show && (
         <div className="fixed bottom-8 left-1/2 z-[100] -translate-x-1/2 animate-in fade-in slide-in-from-bottom-4 duration-300">
           <div className="flex items-center gap-3 rounded-full bg-[#1a1a1a] px-6 py-3 shadow-2xl border border-[#333]">
-            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-green-500">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
+            <div className={`flex h-5 w-5 items-center justify-center rounded-full ${showToast.type === "success" ? "bg-green-500" : "bg-red-500"}`}>
+              {showToast.type === "success" ? (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              ) : (
+                <span className="text-white text-[11px] font-black leading-none">✖</span>
+              )}
             </div>
             <span className="text-[13px] font-medium text-white">{showToast.message}</span>
           </div>

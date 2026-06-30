@@ -5,6 +5,8 @@ import MessageItem from '@/components/molecules/MessageItem';
 
 interface Message {
   id: string;
+  subject?: string;
+  isAdminOutreach?: boolean;
   sender: {
     name: string;
     avatar: string;

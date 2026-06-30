@@ -4,6 +4,8 @@ import React from 'react';
 
 interface Message {
   id: string;
+  subject?: string;
+  isAdminOutreach?: boolean;
   sender: {
     name: string;
     avatar: string;
@@ -64,6 +66,7 @@ function formatSmartDate(ms: number): string {
 }
 
 export default function MessageItem({ message, isSelected, onClick }: MessageItemProps) {
+  const [imgError, setImgError] = React.useState(false);
   const displayTime = message.lastMessage.createdAtMs
     ? formatSmartDate(message.lastMessage.createdAtMs)
     : message.lastMessage.timestamp;
@@ -82,35 +85,48 @@ export default function MessageItem({ message, isSelected, onClick }: MessageIte
       <div className="flex items-center gap-2 sm:gap-3 w-full">
         {/* Avatar */}
         <div className="relative">
-          <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-full bg-[#e8dfd4] flex items-center justify-center overflow-hidden border-2 border-white shadow-sm">
-            <img
-              src={message.sender.avatar}
-              alt={message.sender.name}
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                const target = e.target as HTMLImageElement;
-                target.style.display = 'none';
-                target.parentElement!.innerHTML = `<svg width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#8C4F00\" strokeWidth=\"1.5\"><circle cx=\"12\" cy=\"8\" r=\"4\"/><path d=\"M4 20c0-4 3.6-7 8-7s8 3 8 7\"/></svg>`;
-              }}
-            />
+          <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-full bg-gray-900 flex items-center justify-center overflow-hidden border-2 border-white shadow-sm">
+            {message.sender.avatar === 'support' ? (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F7931A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 text-orange-500">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              </svg>
+            ) : imgError || !message.sender.avatar ? (
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8C4F00" strokeWidth="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+            ) : (
+              <img
+                src={message.sender.avatar}
+                alt={message.sender.name}
+                className="w-full h-full object-cover"
+                onError={() => setImgError(true)}
+              />
+            )}
           </div>
           {/* Online indicator */}
-          {message.sender.isOnline && (
+          {message.sender.isOnline && !message.isAdminOutreach && (
             <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 sm:w-4 sm:h-4 bg-green-500 border-2 border-white rounded-full"></div>
           )}
         </div>
-
+ 
         {/* Message Content */}
         <div className="flex-1 min-w-0 text-xs sm:text-sm">
           <div className="flex items-center justify-between mb-1">
-            <h3 className="font-bold text-[16px] text-[#1a1a1a] truncate">
-              {message.sender.name}
+            <h3 className="font-bold text-[15px] sm:text-[16px] text-[#1a1a1a] truncate">
+              {message.subject || message.sender.name}
             </h3>
             <span className="text-xs text-gray-400 flex-shrink-0 ml-2">
               {displayTime}
             </span>
           </div>
-
+ 
+          {message.subject && (
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <span className="text-[11px] font-bold text-gray-400">Bitlance Support</span>
+              <span className="inline-flex items-center rounded-md bg-orange-50 px-1.5 py-0.5 text-[9px] font-bold text-[#8C4F00] ring-1 ring-inset ring-orange-200">
+                Support
+              </span>
+            </div>
+          )}
+ 
           <p className={`
             text-xs sm:text-sm truncate
             ${message.lastMessage.isRead ? 'text-gray-500' : 'text-[#1a1a1a] font-medium'}

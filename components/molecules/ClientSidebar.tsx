@@ -115,15 +115,6 @@ const CLIENT_SIDEBAR_ITEMS: SidebarItem[] = [
       </svg>
     ),
   },
-  {
-    label: "Admin Inbox",
-    href: "/client/dashboard/admin-inbox",
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-      </svg>
-    ),
-  },
 ];
 
 export default function ClientSidebar({ active = "/client/dashboard", hideMobileToggle = false }: ClientSidebarProps) {
@@ -333,9 +324,8 @@ export default function ClientSidebar({ active = "/client/dashboard", hideMobile
           {CLIENT_SIDEBAR_ITEMS.map((item) => {
             const isActive = active === item.href;
             const showDot =
-              (item.label === "Messages" && hasUnreadMessages) ||
-              (item.label === "Contracts" && hasUnreadContracts) ||
-              (item.label === "Admin Inbox" && hasUnreadAdminInbox);
+              (item.label === "Messages" && (hasUnreadMessages || hasUnreadAdminInbox)) ||
+              (item.label === "Contracts" && hasUnreadContracts);
             return (
               <Link
                 key={item.href}

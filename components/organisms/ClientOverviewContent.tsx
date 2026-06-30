@@ -14,7 +14,7 @@ type FirestoreDateValue = string | number | Date | { seconds?: number } | null |
 const METRICS = [
   { label: "Active Contracts", value: "0", change: "None yet", tone: "neutral" as const },
   { label: "Open Job Posts", value: "0", change: "None yet", tone: "neutral" as const },
-  { label: "Total Spend", value: "0 sats", change: "None yet", tone: "neutral" as const },
+  { label: "Total Spent", value: "0 sats", change: "None yet", tone: "neutral" as const },
   { label: "Response Rate", value: "—", change: "Pending data", tone: "neutral" as const },
 ];
 
@@ -278,10 +278,16 @@ export default function ClientOverviewContent() {
         : `${value} sats`
       : null;
 
-  const totalSpend = useMemo(
-    () => contracts.reduce((acc, contract) => acc + parseSats(contract.budget), 0),
-    [contracts]
-  );
+  const totalSpent = useMemo(() => {
+    return contracts.reduce((acc, contract) => {
+      const milestones = contract.milestones ?? [];
+      if (milestones.length > 0) {
+        const releasedSum = milestones.reduce((sum, ms) => sum + Number(ms.releasedSats ?? 0), 0);
+        return acc + releasedSum;
+      }
+      return acc + Number(contract.escrowReleasedSats ?? 0);
+    }, 0);
+  }, [contracts]);
 
   const resolveFreelancerName = async (freelancerId: string, fallbackName: string) => {
     const initialFallback = fallbackName?.trim() || "";
@@ -505,7 +511,7 @@ export default function ClientOverviewContent() {
   const dynamicMetrics = [
     { label: "Active Contracts", value: `${activeContracts.length}`, change: activeContracts.length ? "Live" : "None yet", tone: activeContracts.length ? "up" as const : "neutral" as const },
     { label: "Open Job Posts", value: `${jobs.filter(j => j.status === 'Open').length}`, change: "Currently active", tone: "neutral" as const },
-    { label: "Total Spend", value: `${totalSpend.toLocaleString()} sats`, change: totalSpend ? "Across contracts" : "None yet", tone: totalSpend ? "up" as const : "neutral" as const },
+    { label: "Total Spent", value: `${totalSpent.toLocaleString()} sats`, change: totalSpent ? "Across contracts" : "None yet", tone: totalSpent ? "up" as const : "neutral" as const },
     { label: "Total Jobs Posted", value: `${jobs.length}`, change: "Lifetime posts", tone: "neutral" as const },
   ];
 

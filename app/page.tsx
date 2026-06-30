@@ -5,6 +5,7 @@ import WhyBitlance from "@/components/organisms/WhyBitlance";
 import BrowseCategory from "@/components/organisms/BrowseCategory";
 import HowItWorks from "@/components/organisms/HowItWorks";
 import TopOpportunities from "@/components/organisms/TopOpportunities";
+import Testimonials from "@/components/organisms/Testimonials";
 import Footer from "@/components/organisms/Footer";
 
 export default function Home() {
@@ -20,6 +21,7 @@ export default function Home() {
         <HowItWorks />
         <TopOpportunities />
         <WhyBitlance />
+        <Testimonials />
       </main>
 
       <Footer />

@@ -1697,6 +1697,8 @@ type Conversation = {
   } | null;
   submissionReviewDueAt?: any;
   revisionMessage?: string;
+  subject?: string;
+  isAdminOutreach?: boolean;
 };
 
 const numberField = (value: unknown) => Number(value ?? 0);
@@ -1873,7 +1875,16 @@ const clearUnpaidInvoice = async (conversationId: string, contractId: string) =>
 export default function ClientMessagesPage() {
   const searchParams = useSearchParams();
   const [selectedChat, setSelectedChat] = useState<string | null>(null);
-  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [dbConversations, setDbConversations] = useState<Conversation[]>([]);
+  const [dbOutreach, setDbOutreach] = useState<Conversation[]>([]);
+
+  const conversations = useMemo(() => {
+    return [...dbConversations, ...dbOutreach];
+  }, [dbConversations, dbOutreach]);
+
+  const selectedConversation = useMemo(() => {
+    return conversations.find((c) => c.id === selectedChat) ?? null;
+  }, [conversations, selectedChat]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [pendingSubmissionJob, setPendingSubmissionJob] = useState<SubmittedJob | null>(null);
@@ -1958,9 +1969,11 @@ export default function ClientMessagesPage() {
 
   useEffect(() => {
     let unsubscribeConversations: (() => void) | null = null;
+    let unsubscribeOutreach: (() => void) | null = null;
     const unsubscribeAuth = firebaseAuth.onAuthStateChanged((user) => {
       if (!user) {
-        setConversations([]);
+        setDbConversations([]);
+        setDbOutreach([]);
         setChatMessages([]);
         setCurrentUserId(null);
         return;
@@ -2090,7 +2103,7 @@ export default function ClientMessagesPage() {
           })
         );
 
-        setConversations(items);
+        setDbConversations(items);
 
         const activeIds = new Set(
           items.map((conv) => conv.freelancerId).filter(Boolean)
@@ -2120,11 +2133,42 @@ export default function ClientMessagesPage() {
           presenceUnsubs.current[uid] = unsubscribePresence;
         });
       });
+
+      const outreachQuery = query(
+        collection(firebaseDb, "admin_outreach"),
+        where("recipientId", "==", user.uid),
+        where("recipientRole", "==", "client")
+      );
+
+      unsubscribeOutreach = onSnapshot(outreachQuery, (snapshot) => {
+        const items = snapshot.docs.map((docSnap) => {
+          const data = docSnap.data() as any;
+          const rawCreatedAt = data.lastMessageAt;
+          return {
+            id: docSnap.id,
+            subject: data.subject ?? "Support Thread",
+            isAdminOutreach: true,
+            freelancerId: "support",
+            freelancerName: "Bitlance Support",
+            freelancerAvatarUrl: "support",
+            unread: {
+              [user.uid]: data.unreadByRecipient ? 1 : 0
+            },
+            lastMessage: {
+              text: data.lastMessageText ?? "Start conversation",
+              senderId: data.lastSenderRole === "admin" ? "support" : user.uid,
+              createdAt: rawCreatedAt ?? null
+            }
+          } as Conversation;
+        });
+        setDbOutreach(items);
+      });
     });
 
     return () => {
       unsubscribeAuth();
       if (unsubscribeConversations) unsubscribeConversations();
+      if (unsubscribeOutreach) unsubscribeOutreach();
       Object.values(presenceUnsubs.current).forEach((unsub) => unsub());
       presenceUnsubs.current = {};
     };
@@ -2149,17 +2193,24 @@ export default function ClientMessagesPage() {
       setChatMessages([]);
       return;
     }
+    const isOutreach = selectedConversation?.isAdminOutreach;
     const messagesQuery = query(
-      collection(firebaseDb, "conversations", selectedChat, "messages"),
+      collection(
+        firebaseDb,
+        isOutreach ? "admin_outreach" : "conversations",
+        selectedChat,
+        "messages"
+      ),
       orderBy("createdAt", "asc")
     );
     const unsubscribe = onSnapshot(messagesQuery, (snapshot) => {
       const items: ChatMessage[] = snapshot.docs.map((docSnap) => {
         const data = docSnap.data() as any;
         const attachmentData = data.attachment as any;
+        const isMe = data.senderId === currentUserId || (data.senderRole && data.senderRole !== "admin" && data.senderId === currentUserId);
         return {
           id: docSnap.id,
-          sender: data.senderId === currentUserId ? "me" : "them",
+          sender: isMe ? "me" : "them",
           text: data.text ?? "",
           timestamp: formatTimestamp(data.createdAt) || "Now",
           isRead: true,
@@ -2177,17 +2228,22 @@ export default function ClientMessagesPage() {
       setChatMessages(items);
     });
     return () => unsubscribe();
-  }, [selectedChat, currentUserId]);
+  }, [selectedChat, currentUserId, selectedConversation?.isAdminOutreach]);
 
   useEffect(() => {
     if (!selectedChat || !currentUserId) return;
-    updateDoc(doc(firebaseDb, "conversations", selectedChat), {
-      [`unread.${currentUserId}`]: 0,
-      updatedAt: serverTimestamp(),
-    }).catch(() => undefined);
-  }, [selectedChat, currentUserId]);
-
-  const selectedConversation = conversations.find((c) => c.id === selectedChat) ?? null;
+    if (selectedConversation?.isAdminOutreach) {
+      updateDoc(doc(firebaseDb, "admin_outreach", selectedChat), {
+        unreadByRecipient: false,
+        updatedAt: serverTimestamp(),
+      }).catch(() => undefined);
+    } else {
+      updateDoc(doc(firebaseDb, "conversations", selectedChat), {
+        [`unread.${currentUserId}`]: 0,
+        updatedAt: serverTimestamp(),
+      }).catch(() => undefined);
+    }
+  }, [selectedChat, currentUserId, selectedConversation?.isAdminOutreach]);
 
   // ── Auto-verify invoice on chat open / page refresh + 60-second polling ──
   // FIX: replaced single one-shot checkOnLoad with a function that also runs
@@ -2578,28 +2634,46 @@ export default function ClientMessagesPage() {
     }
 
     const messageText = text || (attachment ? `Shared a file: ${attachment.name}` : "");
-    await addDoc(collection(firebaseDb, "conversations", selectedConversation.id, "messages"), {
-      senderId: currentUserId,
-      senderRole: "client",
-      text: messageText,
-      attachment: attachment ?? null,
-      createdAt: serverTimestamp(),
-    });
-    await updateDoc(doc(firebaseDb, "conversations", selectedConversation.id), {
-      "lastMessage.text": messageText,
-      "lastMessage.senderId": currentUserId,
-      "lastMessage.createdAt": serverTimestamp(),
-      [`unread.${currentUserId}`]: 0,
-      [`unread.${otherId}`]: increment(1),
-      updatedAt: serverTimestamp(),
-    });
-    void sendUserNotification({
-      userId: otherId,
-      title: `New message from ${selectedConversation.clientName || "Client"}`,
-      body: messageText,
-      url: `/freelancer/dashboard/messages?chat=${selectedConversation.id}`,
-      tag: `message-${selectedConversation.id}`,
-    }).catch(console.error);
+    if (selectedConversation.isAdminOutreach) {
+      await addDoc(collection(firebaseDb, "admin_outreach", selectedConversation.id, "messages"), {
+        senderId: currentUserId,
+        senderRole: "client",
+        text: messageText,
+        attachment: attachment ?? null,
+        createdAt: serverTimestamp(),
+      });
+      await updateDoc(doc(firebaseDb, "admin_outreach", selectedConversation.id), {
+        lastMessageText: messageText,
+        lastSenderRole: "client",
+        lastMessageAt: serverTimestamp(),
+        unreadByRecipient: false,
+        unreadByAdmin: true,
+        updatedAt: serverTimestamp(),
+      });
+    } else {
+      await addDoc(collection(firebaseDb, "conversations", selectedConversation.id, "messages"), {
+        senderId: currentUserId,
+        senderRole: "client",
+        text: messageText,
+        attachment: attachment ?? null,
+        createdAt: serverTimestamp(),
+      });
+      await updateDoc(doc(firebaseDb, "conversations", selectedConversation.id), {
+        "lastMessage.text": messageText,
+        "lastMessage.senderId": currentUserId,
+        "lastMessage.createdAt": serverTimestamp(),
+        [`unread.${currentUserId}`]: 0,
+        [`unread.${otherId}`]: increment(1),
+        updatedAt: serverTimestamp(),
+      });
+      void sendUserNotification({
+        userId: otherId,
+        title: `New message from ${selectedConversation.clientName || "Client"}`,
+        body: messageText,
+        url: `/freelancer/dashboard/messages?chat=${selectedConversation.id}`,
+        tag: `message-${selectedConversation.id}`,
+      }).catch(console.error);
+    }
   };
 
   const handleCreatePaymentInvoice = async ({
@@ -3079,6 +3153,8 @@ export default function ClientMessagesPage() {
                         : selectedConversation.id
                     }
                     viewerRole_disputeRole="client"
+                    isAdminOutreach={selectedConversation.isAdminOutreach}
+                    subject={selectedConversation.subject}
                   />
 
                   {contractModalContractId ? (
