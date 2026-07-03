@@ -8,7 +8,7 @@ export default function ClientPaymentsPage() {
         <div className="w-full">
           <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-8">
             <ClientSidebar active="/client/dashboard/payments" />
-            <section className="px-4 pb-10 pt-[79px] sm:px-6 lg:px-8 md:pt-6">
+            <section className="px-4 pb-10 pt-6 sm:px-6 lg:px-8 md:pt-6">
               <ClientPaymentsContent />
             </section>
           </div>

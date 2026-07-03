@@ -8,7 +8,7 @@ export default function ClientAdminInboxPage() {
         <div className="w-full">
           <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr]">
             <ClientSidebar active="/client/dashboard/admin-inbox" />
-            <section className="px-4 pb-10 pt-[79px] sm:px-6 lg:px-6 md:pt-6">
+            <section className="px-4 pb-10 pt-6 sm:px-6 lg:px-6 md:pt-6">
               <AdminInboxContent role="client" />
             </section>
           </div>
