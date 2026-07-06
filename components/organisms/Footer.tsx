@@ -68,37 +68,21 @@ export default function Footer() {
             {/* Social Icons */}
             <div className="flex items-center gap-4 text-[#9e9690]">
               {/* Twitter / X */}
-              <a href="#" aria-label="Twitter" className="hover:text-[#F7931A] transition-colors">
+              <a href="https://x.com/bitlancework" target="_blank" rel="noopener noreferrer" aria-label="Twitter" className="hover:text-[#F7931A] transition-colors">
                 <svg className="h-4.5 w-4.5" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
                 </svg>
               </a>
               {/* GitHub */}
-              <a href="#" aria-label="GitHub" className="hover:text-[#F7931A] transition-colors">
+              <a href="https://github.com/bitlance1" target="_blank" rel="noopener noreferrer" aria-label="GitHub" className="hover:text-[#F7931A] transition-colors">
                 <svg className="h-4.5 w-4.5" viewBox="0 0 24 24" fill="currentColor">
                   <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.9-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33.85 0 1.71.11 2.5.33 1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0012 2z" />
                 </svg>
               </a>
               {/* Telegram */}
-              <a href="#" aria-label="Telegram" className="hover:text-[#F7931A] transition-colors">
+              <a href="https://t.me/+ITw8yz1xJIhjNWE0" target="_blank" rel="noopener noreferrer" aria-label="Telegram" className="hover:text-[#F7931A] transition-colors">
                 <svg className="h-4.5 w-4.5" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.2-.08-.06-.19-.04-.27-.02-.12.02-1.96 1.24-5.52 3.64-.52.36-.99.53-1.4.52-.46-.01-1.34-.26-2-.47-.8-.26-1.43-.4-1.38-.85.03-.24.36-.48.99-.72 3.87-1.68 6.46-2.79 7.77-3.32 3.69-1.5 4.46-1.76 4.96-1.77.11 0 .36.03.52.16.14.12.18.28.19.4z" />
-                </svg>
-              </a>
-              {/* Nostr / Web */}
-              <a href="#" aria-label="Nostr" className="hover:text-[#F7931A] transition-colors">
-                <svg className="h-4.5 w-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                  <path d="M2 12h20" />
-                </svg>
-              </a>
-              {/* Instagram */}
-              <a href="#" aria-label="Instagram" className="hover:text-[#F7931A] transition-colors">
-                <svg className="h-4.5 w-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
-                  <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
-                  <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
                 </svg>
               </a>
             </div>
