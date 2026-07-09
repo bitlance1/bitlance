@@ -172,7 +172,7 @@ export default function FindFreelancersClient({ initialFreelancers }: FindFreela
   }, [freelancers, searchTerm, selectedSkills]);
 
   return (
-    <section className="bg-[#FCF9F7] pt-[30px] pb-16 min-h-screen">
+    <section className="bg-[#FCF9F7] pt-[120px] pb-16 min-h-screen">
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
 
         {/* Page header */}
