@@ -74,7 +74,7 @@ type ProposalItem = {
   status?: string;
 };
 
-type JobStatus = "Open" | "In Review" | "Paused";
+type JobStatus = "Open" | "In Review" | "Paused" | "Closed";
 
 type JobPost = {
   id: string;
@@ -169,10 +169,10 @@ const getLiveProgress = (contract: Contract) => {
 
   const currentMilestoneWeight =
     contract.workStatus === "submitted" ? 0.75 :
-    contract.workStatus === "changes_requested" ? 0.6 :
-    contract.workStatus === "in_progress" || contract.paymentStatus === "funded" ? 0.45 :
-    contract.paymentStatus === "invoice_created" ? 0.15 :
-    0;
+      contract.workStatus === "changes_requested" ? 0.6 :
+        contract.workStatus === "in_progress" || contract.paymentStatus === "funded" ? 0.45 :
+          contract.paymentStatus === "invoice_created" ? 0.15 :
+            0;
 
   const derivedProgress = Math.round(((releasedCount + currentMilestoneWeight) / total) * 100);
   const storedProgress = Number.isFinite(contract.progress) ? contract.progress : 0;
@@ -534,10 +534,10 @@ export default function ClientOverviewContent() {
             {/* <Button size="sm" variant="outline" className="rounded-full w-full sm:w-auto">
               View Reports
             </Button> */}
-            <Button 
-              size="sm" 
-              className="rounded-full w-full sm:w-auto" 
-              onClick={() => window.location.href='/client/dashboard/job-posts?action=new'}
+            <Button
+              size="sm"
+              className="rounded-full w-full sm:w-auto"
+              onClick={() => window.location.href = '/client/dashboard/job-posts?action=new'}
             >
               Post New Job
             </Button>
@@ -619,6 +619,7 @@ export default function ClientOverviewContent() {
                   Open: "bg-[#E8F5E9] text-[#2E7D32]",
                   Paused: "bg-[#FDECEA] text-[#C62828]",
                   "In Review": "bg-[#E8F0FE] text-[#1565C0]",
+                  Closed: "bg-gray-100 text-gray-700 border border-gray-300",
                 };
                 const cleanDesc = job.description?.trim()
                   ? job.description.replace(/[\r\n]+/g, " ").replace(/\s{2,}/g, " ").trim()

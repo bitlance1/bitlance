@@ -98,7 +98,7 @@ export default function JobDetailClient({ job, initialClientSidebar }: JobDetail
 
   const [coverLetter, setCoverLetter] = useState('');
   const [hoursPerWeek, setHoursPerWeek] = useState('');
-  
+
   const jobBudget = digitsOnly(typeof job.budget === 'string' ? job.budget : String(job.budget ?? ''));
   const [hourlyRate, setHourlyRate] = useState(job.jobType === 'Hourly' ? jobBudget : '');
   const [fixedPrice, setFixedPrice] = useState(job.jobType === 'Hourly' ? '' : jobBudget);
@@ -156,7 +156,7 @@ export default function JobDetailClient({ job, initialClientSidebar }: JobDetail
   const skills = Array.isArray(job?.skills) ? job.skills : [];
   const postedAt = formatPostedAt(job?.createdAt);
   const pricingType = job?.jobType === 'Hourly' ? 'Hourly' : 'Fixed Price';
-  
+
   const clientInitials = clientSidebar.name
     .split(' ')
     .filter(Boolean)
@@ -179,42 +179,42 @@ export default function JobDetailClient({ job, initialClientSidebar }: JobDetail
         </div>
 
         <div>
-             <div className="mb-4 sm:mb-6">
-              <div className="flex items-center gap-2 sm:gap-3 mb-2">
-                <span className="bg-[#FEF3E2] text-[#92400E] text-[9px] sm:text-[10px] font-extrabold px-2 sm:px-3 py-1 rounded-full uppercase tracking-widest">
-                  {job.status ?? 'Active Posting'}
-                </span>
-                <span className="text-xs text-gray-400">Posted {postedAt}</span>
+          <div className="mb-4 sm:mb-6">
+            <div className="flex items-center gap-2 sm:gap-3 mb-2">
+              <span className="bg-[#FEF3E2] text-[#92400E] text-[9px] sm:text-[10px] font-extrabold px-2 sm:px-3 py-1 rounded-full uppercase tracking-widest">
+                {job.status ?? 'Active Posting'}
+              </span>
+              <span className="text-xs text-gray-400">Posted {postedAt}</span>
+            </div>
+            <h1 className="text-[28px] sm:text-[40px] lg:text-[50px] font-bold leading-tight mb-3 sm:mb-4 tracking-tight">
+              {job.title}
+            </h1>
+            {/* Quick Stats Row */}
+            <div className="flex flex-wrap gap-4 sm:gap-6 lg:gap-8 mb-2">
+              {/* Budget */}
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-[#FEF3E2] flex items-center justify-center">
+                  <span className="font-extrabold text-[#92400E] text-sm sm:text-base">$</span>
+                </div>
+                <div>
+                  <p className="text-[8px] sm:text-[9px] text-gray-400 uppercase font-extrabold tracking-widest">Budget</p>
+                  <p className="font-bold text-[13px] sm:text-[15px]">{budgetLabel}</p>
+                </div>
               </div>
-              <h1 className="text-[28px] sm:text-[40px] lg:text-[50px] font-bold leading-tight mb-3 sm:mb-4 tracking-tight">
-                {job.title}
-              </h1>
-              {/* Quick Stats Row */}
-              <div className="flex flex-wrap gap-4 sm:gap-6 lg:gap-8 mb-2">
-                {/* Budget */}
+
+              {job.duration ? (
                 <div className="flex items-center gap-2 sm:gap-3">
-                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-[#FEF3E2] flex items-center justify-center">
-                    <span className="font-extrabold text-[#92400E] text-sm sm:text-base">$</span>
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-[#F6F3F1] flex items-center justify-center">
+                    <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-[#92400E]" />
                   </div>
                   <div>
-                    <p className="text-[8px] sm:text-[9px] text-gray-400 uppercase font-extrabold tracking-widest">Budget</p>
-                    <p className="font-bold text-[13px] sm:text-[15px]">{budgetLabel}</p>
+                    <p className="text-[8px] sm:text-[9px] text-gray-400 uppercase font-extrabold tracking-widest">Duration</p>
+                    <p className="font-bold text-[13px] sm:text-[15px]">{job.duration}</p>
                   </div>
                 </div>
-
-                {job.duration ? (
-                  <div className="flex items-center gap-2 sm:gap-3">
-                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-[#F6F3F1] flex items-center justify-center">
-                      <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-[#92400E]" />
-                    </div>
-                    <div>
-                      <p className="text-[8px] sm:text-[9px] text-gray-400 uppercase font-extrabold tracking-widest">Duration</p>
-                      <p className="font-bold text-[13px] sm:text-[15px]">{job.duration}</p>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
+              ) : null}
             </div>
+          </div>
         </div>
 
         {/* Main 2-Column Layout */}
@@ -264,8 +264,20 @@ export default function JobDetailClient({ job, initialClientSidebar }: JobDetail
                 <h2 className="text-lg sm:text-xl font-extrabold">Submit Your Proposal</h2>
               </div>
 
-              <div className="space-y-4 sm:space-y-6">
-                {/* Cover Letter */}
+              {job?.status === 'Closed' ? (
+                <div className="text-center py-8 bg-[#FAF9F6] rounded-2xl border border-dashed border-[#EAE7E2] p-6">
+                  <div className="w-12 h-12 mx-auto mb-3 bg-red-50 rounded-full flex items-center justify-center text-red-500">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                    </svg>
+                  </div>
+                  <h3 className="text-sm font-bold text-gray-800">This Job is Closed</h3>
+                  <p className="text-xs text-gray-500 mt-1">The client has closed this job and is no longer accepting new proposals.</p>
+                </div>
+              ) : (
+                <div className="space-y-4 sm:space-y-6">
+                  {/* Cover Letter */}
                 <div>
                   <label className="block text-[8px] sm:text-[9px] font-extrabold uppercase text-gray-400 mb-2 tracking-widest">
                     Proposal Cover Letter
@@ -348,6 +360,10 @@ export default function JobDetailClient({ job, initialClientSidebar }: JobDetail
                         setErrorMessage('Please log in to submit a proposal.');
                         return;
                       }
+                      if (job?.status === 'Closed') {
+                        setErrorMessage('This job is closed and no longer accepting proposals.');
+                        return;
+                      }
                       if (hasApplied) {
                         setErrorMessage('You already submitted a proposal for this job.');
                         return;
@@ -382,9 +398,9 @@ export default function JobDetailClient({ job, initialClientSidebar }: JobDetail
                         const clientName =
                           job.clientId
                             ? ((await getDoc(doc(firebaseDb, 'all_users', job.clientId))).data() as any)?.fullName ??
-                              job.clientName ??
-                              job.clientCompany ??
-                              'Client'
+                            job.clientName ??
+                            job.clientCompany ??
+                            'Client'
                             : job.clientName ?? job.clientCompany ?? 'Client';
 
                         await addDoc(collection(firebaseDb, 'proposals'), {
@@ -432,10 +448,10 @@ export default function JobDetailClient({ job, initialClientSidebar }: JobDetail
                         setSubmitState('idle');
                       }
                     }}
-                    disabled={submitState === 'submitting' || hasApplied}
+                    disabled={submitState === 'submitting' || hasApplied || job?.status === 'Closed'}
                     className="bg-gradient-to-r from-orange-600 to-orange-400 to-[#F7931A] active:scale-95 text-white px-6 sm:px-8 py-3 sm:py-3.5 rounded-full font-bold text-sm transition-all shadow-md w-full sm:w-auto disabled:opacity-70"
                   >
-                    {hasApplied ? 'Applied' : submitState === 'submitting' ? 'Sending...' : 'Send Proposal'}
+                    {job?.status === 'Closed' ? 'Job Closed' : hasApplied ? 'Applied' : submitState === 'submitting' ? 'Sending...' : 'Send Proposal'}
                   </button>
                 </div>
                 {errorMessage ? (
@@ -447,6 +463,7 @@ export default function JobDetailClient({ job, initialClientSidebar }: JobDetail
                   </div>
                 ) : null}
               </div>
+              )}
             </div>
           </div>
 
@@ -456,7 +473,7 @@ export default function JobDetailClient({ job, initialClientSidebar }: JobDetail
               {/* Action Card */}
               <div>
                 <button
-                  disabled={hasApplied}
+                  disabled={hasApplied || job?.status === 'Closed'}
                   onClick={() => {
                     proposalSectionRef.current?.scrollIntoView({
                       behavior: 'smooth',
@@ -465,7 +482,7 @@ export default function JobDetailClient({ job, initialClientSidebar }: JobDetail
                   }}
                   className="w-full bg-gradient-to-r from-orange-600 to-orange-400 to-[#F7931A] hover:from-[#A85C00] hover:to-[#A85C00] active:scale-95 text-white py-2.5 sm:py-3 rounded-full font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-md mb-2 sm:mb-3 disabled:opacity-70"
                 >
-                  {hasApplied ? 'Applied' : 'Apply Now'} <Zap className="w-4 h-4 sm:w-5 sm:h-5 fill-current" />
+                  {job?.status === 'Closed' ? 'Closed' : hasApplied ? 'Applied' : 'Apply Now'} <Zap className="w-4 h-4 sm:w-5 sm:h-5 fill-current" />
                 </button>
                 <button
                   onClick={async () => {
@@ -489,11 +506,10 @@ export default function JobDetailClient({ job, initialClientSidebar }: JobDetail
                       });
                     }
                   }}
-                  className={`w-full py-2.5 sm:py-3 rounded-full font-bold text-sm border flex items-center justify-center gap-2 transition-all shadow-sm ${
-                    isSaved
+                  className={`w-full py-2.5 sm:py-3 rounded-full font-bold text-sm border flex items-center justify-center gap-2 transition-all shadow-sm ${isSaved
                       ? 'bg-[#F7931A] text-white border-[#F7931A]'
                       : 'bg-white hover:bg-gray-100 text-[#1a1a1a] border-[#e0e0e0]'
-                  }`}
+                    }`}
                 >
                   <Bookmark className="w-4 h-4 sm:w-5 sm:h-5" fill={isSaved ? 'currentColor' : 'none'} />
                   {isSaved ? 'Saved' : 'Save Job'}

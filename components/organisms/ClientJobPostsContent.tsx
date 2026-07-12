@@ -25,7 +25,7 @@ import {
   where,
 } from "firebase/firestore";
 
-type JobStatus = "Open" | "In Review" | "Paused";
+type JobStatus = "Open" | "In Review" | "Paused" | "Closed";
 
 type JobPost = {
   id: string;
@@ -75,7 +75,7 @@ export default function ClientJobPostsContent() {
   const [jobsError, setJobsError] = useState("");
   const [selectedProposals, setSelectedProposals] = useState<Record<string, boolean>>({});
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"all" | "active" | "review" | "paused">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "active" | "review" | "paused" | "closed">("all");
   const [isPostModalOpen, setIsPostModalOpen] = useState(searchParams.get('action') === 'new');
   const [postTitle, setPostTitle] = useState("");
   const [postBudget, setPostBudget] = useState("");
@@ -381,7 +381,7 @@ export default function ClientJobPostsContent() {
       });
       return unsub;
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobs]);
 
   const selectedCount = Object.values(selectedProposals).filter(Boolean).length;
@@ -390,7 +390,8 @@ export default function ClientJobPostsContent() {
     if (activeTab === "all") return true;
     if (activeTab === "active") return job.status === "Open";
     if (activeTab === "review") return job.status === "In Review";
-    return job.status === "Paused";
+    if (activeTab === "paused") return job.status === "Paused";
+    return job.status === "Closed";
   });
   const formatBudget = (value: string) =>
     value.toLowerCase().includes("sats") ? value : `${value} sats`;
@@ -483,8 +484,8 @@ export default function ClientJobPostsContent() {
               type="button"
               onClick={() => setActiveTab("all")}
               className={`rounded-full px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] transition-all ${activeTab === "all"
-                  ? "bg-[#F7931A] text-white border border-[#F7931A]"
-                  : "text-[#6b6762] border border-[#EAE7E2] hover:bg-[#F7F4F0]"
+                ? "bg-[#F7931A] text-white border border-[#F7931A]"
+                : "text-[#6b6762] border border-[#EAE7E2] hover:bg-[#F7F4F0]"
                 }`}
             >
               All
@@ -493,19 +494,19 @@ export default function ClientJobPostsContent() {
               type="button"
               onClick={() => setActiveTab("active")}
               className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] transition-all ${activeTab === "active"
-                  ? "bg-[#F7F4F0] text-[#1a1a1a] border border-[#EAE7E2]"
-                  : "text-[#6b6762] border border-[#EAE7E2] hover:bg-[#F7F4F0]"
+                ? "bg-[#F7F4F0] text-[#1a1a1a] border border-[#EAE7E2]"
+                : "text-[#6b6762] border border-[#EAE7E2] hover:bg-[#F7F4F0]"
                 }`}
             >
               <svg width="8" height="9" viewBox="0 0 8 9" fill="currentColor"><path d="M1 1l6 3.5L1 8V1z" /></svg>
               Active
             </button>
-            <button
+            {/* <button
               type="button"
               onClick={() => setActiveTab("review")}
               className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] transition-all ${activeTab === "review"
-                  ? "bg-[#F7F4F0] text-[#1a1a1a] border border-[#EAE7E2]"
-                  : "text-[#6b6762] border border-[#EAE7E2] hover:bg-[#F7F4F0]"
+                ? "bg-[#F7F4F0] text-[#1a1a1a] border border-[#EAE7E2]"
+                : "text-[#6b6762] border border-[#EAE7E2] hover:bg-[#F7F4F0]"
                 }`}
             >
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -517,14 +518,28 @@ export default function ClientJobPostsContent() {
               type="button"
               onClick={() => setActiveTab("paused")}
               className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] transition-all ${activeTab === "paused"
-                  ? "bg-[#F7F4F0] text-[#1a1a1a] border border-[#EAE7E2]"
-                  : "text-[#6b6762] border border-[#EAE7E2] hover:bg-[#F7F4F0]"
+                ? "bg-[#F7F4F0] text-[#1a1a1a] border border-[#EAE7E2]"
+                : "text-[#6b6762] border border-[#EAE7E2] hover:bg-[#F7F4F0]"
                 }`}
             >
               <svg width="10" height="11" viewBox="0 0 10 11" fill="currentColor">
                 <rect x="1" y="1" width="3" height="9" rx="1" /><rect x="6" y="1" width="3" height="9" rx="1" />
               </svg>
               Paused
+            </button> */}
+            <button
+              type="button"
+              onClick={() => setActiveTab("closed")}
+              className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] transition-all ${activeTab === "closed"
+                ? "bg-[#F7F4F0] text-[#1a1a1a] border border-[#EAE7E2]"
+                : "text-[#6b6762] border border-[#EAE7E2] hover:bg-[#F7F4F0]"
+                }`}
+            >
+              <svg width="10" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+              Closed
             </button>
           </div>
         </div>
@@ -557,6 +572,16 @@ export default function ClientJobPostsContent() {
                   setIsEditModalOpen(true);
                 }}
                 onDelete={() => setDeleteJobId(job.id)}
+                onClose={async () => {
+                  try {
+                    await updateDoc(doc(firebaseDb, "jobs", job.id), {
+                      status: job.status === "Closed" ? "Open" : "Closed",
+                      updatedAt: serverTimestamp(),
+                    });
+                  } catch (err) {
+                    triggerToast("Failed to update job status. Please try again.", "error");
+                  }
+                }}
               />
             ))
           ) : (
@@ -793,6 +818,7 @@ export default function ClientJobPostsContent() {
                   });
                   const jobRef = doc(firebaseDb, "jobs", selectedJob.id);
                   batch.update(jobRef, {
+                    status: "Closed",
                     selectedFreelancerIds: arrayUnion(...freelancerIds),
                     selectedFreelancerNames: arrayUnion(...freelancerNames),
                     updatedAt: serverTimestamp(),
@@ -826,7 +852,7 @@ export default function ClientJobPostsContent() {
             onClick={() => setIsEditModalOpen(false)}
           />
           <div className="relative z-[91] w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-lg border border-zinc-200 bg-white shadow-[0_20px_50px_rgba(0,0,0,0.15)] flex flex-col">
-            
+
             {/* Header */}
             <div className="p-6 pb-4 relative">
               <button
@@ -845,7 +871,7 @@ export default function ClientJobPostsContent() {
                 Make changes to your job post and save them.
               </p>
             </div>
-            
+
             <div className="border-t border-zinc-100" />
 
             {/* Form Fields */}
@@ -923,8 +949,8 @@ export default function ClientJobPostsContent() {
                   className="w-full rounded-[6px] border border-zinc-200 px-3 py-2 text-xs focus:outline-none focus:border-[#F7931A] focus:ring-1 focus:ring-[#F7931A] bg-[#FAF9F6] text-zinc-900"
                 >
                   <option value="Open">Open</option>
-                  <option value="In Review">In Review</option>
-                  <option value="Paused">Paused</option>
+                  {/* <option value="In Review">In Review</option>
+                  <option value="Paused">Paused</option> */}
                 </select>
               </div>
 
@@ -1019,14 +1045,12 @@ export default function ClientJobPostsContent() {
                 <button
                   type="button"
                   onClick={() => setEditUrgent((v) => !v)}
-                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors cursor-pointer ${
-                    editUrgent ? "bg-[#F7931A]" : "bg-zinc-200"
-                  }`}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors cursor-pointer ${editUrgent ? "bg-[#F7931A]" : "bg-zinc-200"
+                    }`}
                 >
                   <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      editUrgent ? "translate-x-4" : "translate-x-0.5"
-                    }`}
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${editUrgent ? "translate-x-4" : "translate-x-0.5"
+                      }`}
                   />
                 </button>
               </div>
@@ -1103,7 +1127,7 @@ export default function ClientJobPostsContent() {
             onClick={() => setIsPostModalOpen(false)}
           />
           <div className="relative z-[81] w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-lg border border-zinc-200 bg-white shadow-[0_20px_50px_rgba(0,0,0,0.15)] flex flex-col">
-            
+
             {/* Header */}
             <div className="p-6 pb-4 relative">
               <button
@@ -1122,7 +1146,7 @@ export default function ClientJobPostsContent() {
                 Share the role details and the right freelancers will apply.
               </p>
             </div>
-            
+
             <div className="border-t border-zinc-100" />
 
             {/* Form Fields */}
@@ -1287,14 +1311,12 @@ export default function ClientJobPostsContent() {
                 <button
                   type="button"
                   onClick={() => setPostUrgent((v) => !v)}
-                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors cursor-pointer ${
-                    postUrgent ? "bg-[#F7931A]" : "bg-zinc-200"
-                  }`}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors cursor-pointer ${postUrgent ? "bg-[#F7931A]" : "bg-zinc-200"
+                    }`}
                 >
                   <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      postUrgent ? "translate-x-4" : "translate-x-0.5"
-                    }`}
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${postUrgent ? "translate-x-4" : "translate-x-0.5"
+                      }`}
                   />
                 </button>
               </div>

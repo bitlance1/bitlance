@@ -81,6 +81,7 @@ type JobFeedItem = {
   companyLogo?: string;
   duration?: string;
   rawCreatedAt?: any;
+  status?: string;
 };
 
 // ─── Company logo component (mirrors ClientJobPostCard logic) ─────────────────
@@ -197,6 +198,7 @@ export default function JobFeedContent() {
               companyLogo: data.companyLogo || logoMap[clientId] || '',
               duration: data.duration ?? '',
               rawCreatedAt: data.createdAt,
+              status: data.status ?? 'Open',
             };
           });
 
@@ -258,6 +260,7 @@ export default function JobFeedContent() {
     () =>
       jobs.filter(
         (job) =>
+          job.status !== 'Closed' &&
           (activeCategory === 'All' ||
             job.tags.includes(activeCategory) ||
             job.title.includes(activeCategory) ||
@@ -342,11 +345,10 @@ export default function JobFeedContent() {
                   <button
                     key={cat}
                     onClick={() => setActiveCategory(cat)}
-                    className={`shrink-0 whitespace-nowrap rounded-full border px-6 py-2 text-xs font-bold transition-all ${
-                      activeCategory === cat
+                    className={`shrink-0 whitespace-nowrap rounded-full border px-6 py-2 text-xs font-bold transition-all ${activeCategory === cat
                         ? 'bg-gradient-to-r from-orange-600 to-orange-400 text-white shadow-lg shadow-[#F7931A]/20'
                         : 'bg-white text-[#6b6560] border-[#ece7df]'
-                    }`}
+                      }`}
                   >
                     {cat}
                   </button>
@@ -486,11 +488,10 @@ function JobFeedCard({
                 e.stopPropagation();
                 onToggleSave?.();
               }}
-              className={`flex items-center justify-center h-9 w-9 rounded-full border transition-colors ${
-                isSaved
+              className={`flex items-center justify-center h-9 w-9 rounded-full border transition-colors ${isSaved
                   ? 'bg-[#F7931A] text-white border-[#F7931A]'
                   : 'bg-white text-[#8C4F00] border-[#EAE7E2] hover:bg-[#F7F4F0]'
-              }`}
+                }`}
               aria-label={isSaved ? 'Unsave job' : 'Save job'}
             >
               <Bookmark className="w-4 h-4" fill={isSaved ? 'currentColor' : 'none'} />

@@ -47,7 +47,7 @@ interface ClientJobPostCardProps {
   id?: string;
   title: string;
   description?: string;
-  status: "Open" | "Paused" | "In Review";
+  status: "Open" | "Paused" | "In Review" | "Closed";
   budget: string;
   duration?: string;
   proposals: number;
@@ -60,6 +60,7 @@ interface ClientJobPostCardProps {
   onSelect?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  onClose?: () => void;
 }
 
 export default function ClientJobPostCard({
@@ -79,6 +80,7 @@ export default function ClientJobPostCard({
   onSelect,
   onEdit,
   onDelete,
+  onClose,
 }: ClientJobPostCardProps) {
   const [logoLoadFailed, setLogoLoadFailed] = useState(false);
 
@@ -88,6 +90,7 @@ export default function ClientJobPostCard({
     Open: "bg-[#E8F5E9] text-[#2E7D32]",
     Paused: "bg-[#FDECEA] text-[#C62828]",
     "In Review": "bg-[#E8F0FE] text-[#1565C0]",
+    Closed: "bg-gray-100 text-gray-700 border border-gray-300",
   } as const;
 
   const budgetNumeric = budget?.replace(/[^0-9,]/g, "").trim() || "0";
@@ -100,11 +103,10 @@ export default function ClientJobPostCard({
   return (
     <div
       onClick={onSelect}
-      className={`w-full cursor-pointer rounded-[16px] border bg-white p-5 shadow-[0_2px_12px_rgba(0,0,0,0.06)] transition-all ${
-        isSelected
+      className={`w-full cursor-pointer rounded-[16px] border bg-white p-5 shadow-[0_2px_12px_rgba(0,0,0,0.06)] transition-all ${isSelected
           ? "border-[#F7931A] ring-1 ring-[#F7931A]/30"
           : "border-[#EAE7E2] hover:border-[#F7931A]/40 hover:shadow-[0_4px_20px_rgba(0,0,0,0.09)]"
-      }`}
+        }`}
       data-job-id={id}
       role="button"
       tabIndex={0}
@@ -244,6 +246,31 @@ export default function ClientJobPostCard({
               <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
             </svg>
             Edit
+          </button>
+        )}
+        {onClose && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onClose(); }}
+            className="flex items-center gap-1.5 rounded-[10px] border border-[#EAE7E2] px-4 py-2.5 text-[13px] font-semibold text-[#6b6762] transition-colors hover:bg-[#F3F0EC] hover:text-[#1a1a1a]"
+          >
+            {status === "Closed" ? (
+              <>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+                Reopen
+              </>
+            ) : (
+              <>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+                Close
+              </>
+            )}
           </button>
         )}
         {onDelete && (
