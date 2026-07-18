@@ -117,8 +117,8 @@ export default function MessageItem({
             </svg>
           ) : imgError || !message.sender.avatar ? (
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8C4F00" strokeWidth="1.5">
-              <circle cx="12" cy="8" r="4"/>
-              <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+              <circle cx="12" cy="8" r="4" />
+              <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
             </svg>
           ) : (
             <img
@@ -170,22 +170,30 @@ export default function MessageItem({
       </div>
 
       {/* Star / Unread Badge / Archive Toggle Container (always aligned bottom-right) */}
-      <div className="absolute bottom-3 right-4 flex items-center justify-end select-none min-h-[22px]">
-        {/* Hover Action Mode: Star + Archive */}
-        <div className="hidden group-hover:flex items-center gap-1 bg-white/95 rounded-full shadow-2xs border border-gray-100 px-1 py-0.5">
+      <div className="absolute bottom-3 right-4 flex items-center justify-end gap-2 select-none min-h-[22px]">
+        {/* Unread Count Badge (Always visible if > 0) */}
+        {message.unreadCount > 0 && (
+          <div className="w-[18px] h-[18px] sm:w-[20px] sm:h-[20px] bg-[#E05206] rounded-full flex items-center justify-center shadow-2xs">
+            <span className="text-[9px] sm:text-[10px] font-black text-white leading-none">
+              {message.unreadCount}
+            </span>
+          </div>
+        )}
+
+        {/* Desktop Hover Action Mode: Star + Archive */}
+        <div className="hidden lg:group-hover:flex items-center gap-1 bg-white/95 rounded-full shadow-2xs border border-gray-100 px-1 py-0.5">
           <button
             type="button"
             onClick={handleStarClick}
-            className={`p-1 rounded-full transition-colors ${
-              isStarred
+            className={`p-1 rounded-full transition-colors ${isStarred
                 ? 'text-orange-400 hover:text-orange-500'
                 : 'text-gray-300 hover:text-orange-400 hover:bg-gray-50'
-            }`}
+              }`}
             title={isStarred ? 'Unstar conversation' : 'Star conversation'}
           >
             <Star className={`w-3.5 h-3.5 ${isStarred ? 'fill-orange-400 text-orange-400' : ''}`} />
           </button>
-          
+
           <button
             type="button"
             onClick={handleArchiveClick}
@@ -200,15 +208,9 @@ export default function MessageItem({
           </button>
         </div>
 
-        {/* Static State (Non-hovered) */}
-        <div className="group-hover:hidden flex items-center">
-          {message.unreadCount > 0 ? (
-            <div className="w-[18px] h-[18px] sm:w-[20px] sm:h-[20px] bg-[#E05206] rounded-full flex items-center justify-center shadow-2xs">
-              <span className="text-[9px] sm:text-[10px] font-black text-white leading-none">
-                {message.unreadCount}
-              </span>
-            </div>
-          ) : (
+        {/* Desktop Static State (Non-hovered, read only) */}
+        <div className="hidden lg:group-hover:hidden lg:flex items-center">
+          {message.unreadCount === 0 && (
             <button
               type="button"
               onClick={handleStarClick}
@@ -217,6 +219,29 @@ export default function MessageItem({
               <Star className={`w-4 h-4 ${isStarred ? 'fill-orange-400 text-orange-400' : ''}`} />
             </button>
           )}
+        </div>
+
+        {/* Mobile/Tablet Touch Actions (Statically visible on screens < 1024px) */}
+        <div className="flex lg:hidden items-center gap-1.5">
+          <button
+            type="button"
+            onClick={handleStarClick}
+            className={`p-0.5 rounded-full transition-colors ${isStarred ? 'text-orange-400' : 'text-gray-300'}`}
+          >
+            <Star className={`w-3.5 h-3.5 ${isStarred ? 'fill-orange-400 text-orange-400' : ''}`} />
+          </button>
+
+          <button
+            type="button"
+            onClick={handleArchiveClick}
+            className={`p-0.5 rounded-full transition-colors ${isArchived ? 'text-blue-500' : 'text-gray-300'}`}
+          >
+            {isArchived ? (
+              <FolderUp className="w-3.5 h-3.5" />
+            ) : (
+              <Archive className="w-3.5 h-3.5" />
+            )}
+          </button>
         </div>
       </div>
     </div>

@@ -414,7 +414,7 @@ export default function MessagesList({ messages, onSelectChat, selectedChat }: M
       {/* ── SEPARATE INDIVIDUAL CARDS WITH VERTICAL SPACE ── */}
       <div className="flex-1 overflow-y-auto px-4 sm:px-6 pb-6 bg-[#FAF9F6]">
         {filteredMessages.length === 0 ? (
-          <div className="h-[260px] flex items-center justify-center text-center p-6 bg-white rounded-[14px] border border-gray-150 shadow-2xs mt-1">
+          <div className="h-[260px] flex items-center justify-center text-center p-6 bg-white rounded-[14px]  shadow-2xs mt-1">
             <div>
               <div className="w-12 h-12 mx-auto mb-3 bg-gray-50 rounded-full flex items-center justify-center text-gray-400">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
