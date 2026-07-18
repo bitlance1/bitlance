@@ -420,12 +420,12 @@ export default function MessagesPage() {
           isRead: true,
           attachment: attachmentData
             ? {
-                name: attachmentData.name ?? "Attachment",
-                size: attachmentData.size ?? formatFileSize(attachmentData.bytes ?? 0),
-                url: attachmentData.url ?? "",
-                mimeType: attachmentData.mimeType ?? "",
-                resourceType: attachmentData.resourceType ?? "",
-              }
+              name: attachmentData.name ?? "Attachment",
+              size: attachmentData.size ?? formatFileSize(attachmentData.bytes ?? 0),
+              url: attachmentData.url ?? "",
+              mimeType: attachmentData.mimeType ?? "",
+              resourceType: attachmentData.resourceType ?? "",
+            }
             : undefined,
         };
       });

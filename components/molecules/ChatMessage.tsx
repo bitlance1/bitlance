@@ -427,6 +427,7 @@ function LinkPreviewCard({
       rel="noopener noreferrer"
       className={`
         block mt-2 rounded-xl overflow-hidden border transition-all hover:opacity-90
+        w-full min-w-0 max-w-full flex flex-col
         ${isMe
           ? 'border-orange-400/30 bg-[#b86200]'
           : 'border-[#e0d9d0] bg-[#f9f6f2]'}
@@ -445,9 +446,9 @@ function LinkPreviewCard({
       )}
 
       {/* Text body */}
-      <div className="px-3 py-2.5">
+      <div className="px-3 py-2.5 min-w-0 w-full overflow-hidden">
         {/* Domain row */}
-        <div className="flex items-center gap-1.5 mb-1">
+        <div className="flex items-center gap-1.5 mb-1 min-w-0 w-full overflow-hidden">
           {preview.favicon ? (
             <img src={preview.favicon} alt="" className="w-3.5 h-3.5 rounded-sm" />
           ) : (
@@ -465,7 +466,7 @@ function LinkPreviewCard({
         {/* Title */}
         {preview.title && (
           <p
-            className={`text-sm font-bold leading-snug line-clamp-2 ${
+            className={`text-sm font-bold leading-snug line-clamp-2 break-words ${
               isMe ? 'text-white' : 'text-[#1A1A1A]'
             }`}
           >
@@ -476,7 +477,7 @@ function LinkPreviewCard({
         {/* Description */}
         {preview.description && (
           <p
-            className={`text-xs mt-0.5 line-clamp-2 leading-relaxed ${
+            className={`text-xs mt-0.5 line-clamp-2 leading-relaxed break-words ${
               isMe ? 'text-orange-100/80' : 'text-gray-500'
             }`}
           >
@@ -487,7 +488,7 @@ function LinkPreviewCard({
 
       {/* URL footer bar — WhatsApp style */}
       <div
-        className={`px-3 py-1.5 border-t text-[11px] truncate ${
+        className={`px-3 py-1.5 border-t text-[11px] truncate w-full min-w-0 max-w-full overflow-hidden ${
           isMe
             ? 'border-orange-400/30 text-orange-200/70'
             : 'border-[#e0d9d0] text-gray-400'
@@ -716,8 +717,8 @@ async function fetchLinkPreview(url: string): Promise<LinkPreview | null> {
 
 // ─── Message text renderer ───────────────────────────────────────────────────
 function formatMessageText(text: string, isMe: boolean, onInternalLinkClick?: (url: string) => void) {
-  const markdownLinkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+|\/[\w\-\/\.\?\#\=\&\%]+)\)/g;
-  const urlRegex = /(https?:\/\/[^\s]+|\/[\w\-\/\.\?\#\=\&\%]+)/g;
+  const markdownLinkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+|\/(?:client|freelancer|admin|job|api|help|about)[\w\-\/\.\?\#\=\&\%]*)\)/g;
+  const urlRegex = /(https?:\/\/[^\s]+|\/(?:client|freelancer|admin|job|api|help|about)[\w\-\/\.\?\#\=\&\%]*)/g;
   const elements: Array<JSX.Element | string> = [];
   let lastIndex = 0;
   let match: RegExpExecArray | null;
@@ -725,7 +726,7 @@ function formatMessageText(text: string, isMe: boolean, onInternalLinkClick?: (u
   const pushTextWithUrls = (value: string) => {
     const parts = value.split(urlRegex).filter(Boolean);
     parts.forEach((part, index) => {
-      const isUrl = /^(https?:\/\/[^\s]+|\/[\w\-\/\.\?\#\=\&\%]+)$/.test(part);
+      const isUrl = /^(https?:\/\/[^\s]+|\/(?:client|freelancer|admin|job|api|help|about)[\w\-\/\.\?\#\=\&\%]*)$/.test(part);
       if (isUrl) {
         const isInternalLink = isInternalContractLink(part);
         if (isInternalLink && onInternalLinkClick) {
@@ -842,7 +843,7 @@ export default function ChatMessage({
   }, [message.text]);
 
   return (
-    <div className={`flex items-end gap-2 mb-4 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+    <div className={`flex items-end gap-2 mb-4 w-full min-w-0 max-w-full overflow-hidden ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
       {/* Avatar */}
       {isMe ? (
         <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[#CC7000] flex items-center justify-center text-white text-xs font-semibold mb-1 shadow-sm">
@@ -867,7 +868,7 @@ export default function ChatMessage({
       {/* Bubble */}
       <div
         className={`
-          max-w-[78%] min-w-0 px-4 py-3 rounded-2xl shadow-sm break-words overflow-hidden
+          max-w-[78%] min-w-0 w-full px-4 py-3 rounded-2xl shadow-sm break-words overflow-hidden flex flex-col
           ${isMe
             ? 'bg-[#CC7000] text-white rounded-br-md shadow-orange-950/10'
             : 'bg-white text-[#232323] border border-[#ece7df] rounded-bl-md shadow-gray-200'}

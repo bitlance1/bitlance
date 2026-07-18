@@ -2421,9 +2421,9 @@ export default function ClientMessagesPage() {
       const isProposedRateChosen =
         proposedAmount > 0 &&
         (Number(contract.paymentSubtotalSats) === proposedAmount ||
-         milestonesTotal === proposedAmount ||
-         fundedTotal === proposedAmount ||
-         Number(contract.paymentTotalAmountSats) === proposedAmount);
+          milestonesTotal === proposedAmount ||
+          fundedTotal === proposedAmount ||
+          Number(contract.paymentTotalAmountSats) === proposedAmount);
       const totalAmount = Number(
         contract.paymentSubtotalSats ||
         (isProposedRateChosen ? proposedAmount : (contract.paymentTotalAmountSats || budgetAmount || 0))
@@ -3135,8 +3135,8 @@ export default function ClientMessagesPage() {
                     paymentRequest={selectedConversation.paymentRequest}
                     workStatus={selectedConversation.workStatus}
                     submittedWorkHref={`/client/dashboard/contracts?contract=${selectedConversation.jobId && selectedConversation.freelancerId
-                        ? `${selectedConversation.jobId}_${selectedConversation.freelancerId}`
-                        : selectedConversation.id
+                      ? `${selectedConversation.jobId}_${selectedConversation.freelancerId}`
+                      : selectedConversation.id
                       }`}
                     onCreatePaymentInvoice={handleCreatePaymentInvoice}
                     onVerifyPayment={handleVerifyPayment}

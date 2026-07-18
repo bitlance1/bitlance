@@ -3008,7 +3008,7 @@ export default function ChatView({
 
   return (
   <>
-    <div className="flex h-full min-h-0 flex-col bg-[#FCF9F7CC]">
+    <div className="flex h-full min-h-0 w-full min-w-0 max-w-full overflow-hidden flex-col bg-[#FCF9F7CC]">
       {/* Header */}
       <ChatHeader
         sender={isAdminOutreach ? {
