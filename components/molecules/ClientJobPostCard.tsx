@@ -227,68 +227,71 @@ export default function ClientJobPostCard({
       </div>
 
       {/* ── ACTION ROW ── */}
-      <div className="mt-4 flex items-center gap-2">
+      <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-2">
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onSelect?.(); }}
-          className="flex flex-1 items-center justify-center gap-2 rounded-[10px] bg-[#F7931A] px-4 py-2.5 text-[13px] font-bold text-white transition-colors hover:bg-[#e8841a] active:bg-[#d4760f]"
+          className="flex w-full sm:w-auto sm:flex-1 items-center justify-center gap-2 rounded-[10px] bg-[#F7931A] px-4 py-2.5 text-[13px] font-bold text-white transition-colors hover:bg-[#e8841a] active:bg-[#d4760f]"
         >
           View Applicants <span className="text-[15px]">→</span>
         </button>
-        {onEdit && (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onEdit(); }}
-            className="flex items-center gap-1.5 rounded-[10px] border border-[#EAE7E2] px-4 py-2.5 text-[13px] font-semibold text-[#6b6762] transition-colors hover:bg-[#F3F0EC] hover:text-[#1a1a1a]"
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 20h9" />
-              <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
-            </svg>
-            Edit
-          </button>
-        )}
-        {onClose && (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onClose(); }}
-            className="flex items-center gap-1.5 rounded-[10px] border border-[#EAE7E2] px-4 py-2.5 text-[13px] font-semibold text-[#6b6762] transition-colors hover:bg-[#F3F0EC] hover:text-[#1a1a1a]"
-          >
-            {status === "Closed" ? (
-              <>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
-                  <circle cx="12" cy="12" r="3" />
-                </svg>
-                Reopen
-              </>
-            ) : (
-              <>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                </svg>
-                Close
-              </>
-            )}
-          </button>
-        )}
-        {onDelete && (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            aria-label="Delete job post"
-            className="flex items-center justify-center rounded-[10px] border border-[#EAE7E2] p-2.5 text-[#9e9690] transition-colors hover:border-[#FECACA] hover:bg-[#FEF2F2] hover:text-[#DC2626]"
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="3 6 5 6 21 6" />
-              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-              <path d="M10 11v6" />
-              <path d="M14 11v6" />
-              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-            </svg>
-          </button>
-        )}
+
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          {onEdit && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onEdit(); }}
+              className="flex flex-1 sm:flex-initial items-center justify-center gap-1.5 rounded-[10px] border border-[#EAE7E2] px-4 py-2.5 text-[13px] font-semibold text-[#6b6762] transition-colors hover:bg-[#F3F0EC] hover:text-[#1a1a1a]"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+              </svg>
+              Edit
+            </button>
+          )}
+          {onClose && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onClose(); }}
+              className="flex flex-1 sm:flex-initial items-center justify-center gap-1.5 rounded-[10px] border border-[#EAE7E2] px-4 py-2.5 text-[13px] font-semibold text-[#6b6762] transition-colors hover:bg-[#F3F0EC] hover:text-[#1a1a1a]"
+            >
+              {status === "Closed" ? (
+                <>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                  Reopen
+                </>
+              ) : (
+                <>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                  Close
+                </>
+              )}
+            </button>
+          )}
+          {onDelete && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              aria-label="Delete job post"
+              className="flex items-center justify-center rounded-[10px] border border-[#EAE7E2] p-2.5 text-[#9e9690] transition-colors hover:border-[#FECACA] hover:bg-[#FEF2F2] hover:text-[#DC2626]"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                <path d="M10 11v6" />
+                <path d="M14 11v6" />
+                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
