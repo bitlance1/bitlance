@@ -371,14 +371,14 @@ export default function FreelancerSidebar({ active = '/freelancer/dashboard', hi
                   isActive ? "text-orange-600" : "text-[#6b6560]"
                 }`}
               >
-                <span className={isActive ? "text-orange-500 scale-110" : "text-[#9e9690]"}>
+                <span className={`relative flex items-center justify-center ${isActive ? "text-orange-500 scale-110" : "text-[#9e9690]"}`}>
                   {item.icon}
+                  {showDot && (
+                    <span className="absolute -top-1 -right-1.5 inline-flex h-2 w-2 rounded-full bg-[#F7931A] ring-1 ring-[#F5F0EB]" />
+                  )}
                 </span>
                 <span className="text-[10px] font-black tracking-tight relative">
                   {item.label === "Job Feed" ? "Jobs" : item.label}
-                  {showDot && (
-                    <span className="absolute -top-1 -right-2 inline-flex h-2 w-2 rounded-full bg-[#F7931A]" />
-                  )}
                 </span>
               </Link>
             );
@@ -392,18 +392,18 @@ export default function FreelancerSidebar({ active = '/freelancer/dashboard', hi
                 isOpen || isMoreActive ? "text-orange-600" : "text-[#6b6560]"
               }`}
             >
-              <span className={isOpen || isMoreActive ? "text-orange-500 scale-110" : "text-[#9e9690]"}>
+              <span className={`relative flex items-center justify-center ${isOpen || isMoreActive ? "text-orange-500 scale-110" : "text-[#9e9690]"}`}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="12" cy="12" r="1" />
                   <circle cx="19" cy="12" r="1" />
                   <circle cx="5" cy="12" r="1" />
                 </svg>
+                {showMoreDot && (
+                  <span className="absolute -top-1 -right-1.5 inline-flex h-2 w-2 rounded-full bg-[#F7931A] ring-1 ring-[#F5F0EB]" />
+                )}
               </span>
               <span className="text-[10px] font-black tracking-tight relative">
                 More
-                {showMoreDot && (
-                  <span className="absolute -top-1 -right-2 inline-flex h-2 w-2 rounded-full bg-[#F7931A]" />
-                )}
               </span>
             </button>
 
