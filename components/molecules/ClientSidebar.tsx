@@ -124,13 +124,38 @@ const MORE_MENU_ITEMS = [
 export default function ClientSidebar({ active = "/client/dashboard", hideMobileToggle = false }: ClientSidebarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
-  const [displayName, setDisplayName] = useState("Client");
-  const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
-  const [hasUnreadContracts, setHasUnreadContracts] = useState(false);
-  const [hasUnreadAdminInbox, setHasUnreadAdminInbox] = useState(false);
+  const [displayName, setDisplayName] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('client_displayName') || 'Client';
+    }
+    return 'Client';
+  });
+  const [hasUnreadMessages, setHasUnreadMessages] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('client_hasUnreadMessages') === 'true';
+    }
+    return false;
+  });
+  const [hasUnreadContracts, setHasUnreadContracts] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('client_hasUnreadContracts') === 'true';
+    }
+    return false;
+  });
+  const [hasUnreadAdminInbox, setHasUnreadAdminInbox] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('client_hasUnreadAdminInbox') === 'true';
+    }
+    return false;
+  });
   const router = useRouter();
 
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('client_avatarUrl') || null;
+    }
+    return null;
+  });
   const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
 
   useEffect(() => {
@@ -163,12 +188,12 @@ export default function ClientSidebar({ active = "/client/dashboard", hideMobile
               clientData = {};
             }
 
-            setDisplayName(
-              clientData.fullName ??
+            const finalName = clientData.fullName ??
               allData.fullName ??
               user.displayName ??
-              "Client"
-            );
+              "Client";
+
+            setDisplayName(finalName);
 
             const nextAvatarUrl =
               clientData.avatarUrl ??
@@ -178,6 +203,15 @@ export default function ClientSidebar({ active = "/client/dashboard", hideMobile
 
             setAvatarUrl(nextAvatarUrl);
             setAvatarLoadFailed(false);
+
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('client_displayName', finalName);
+              if (nextAvatarUrl) {
+                localStorage.setItem('client_avatarUrl', nextAvatarUrl);
+              } else {
+                localStorage.removeItem('client_avatarUrl');
+              }
+            }
           } catch {
             setDisplayName(user.displayName ?? "Client");
             setAvatarUrl(user.photoURL ?? null);
@@ -221,6 +255,9 @@ export default function ClientSidebar({ active = "/client/dashboard", hideMobile
           return (data.unread?.[user.uid] ?? 0) > 0;
         });
         setHasUnreadMessages(hasUnread);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('client_hasUnreadMessages', String(hasUnread));
+        }
       }, () => {});
 
       const contractsQuery = query(
@@ -229,7 +266,11 @@ export default function ClientSidebar({ active = "/client/dashboard", hideMobile
         where("unreadByClient", "==", true)
       );
       unsubscribeContracts = onSnapshot(contractsQuery, (snapshot) => {
-        setHasUnreadContracts(!snapshot.empty);
+        const hasUnread = !snapshot.empty;
+        setHasUnreadContracts(hasUnread);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('client_hasUnreadContracts', String(hasUnread));
+        }
       }, () => {});
 
       const adminInboxQuery = query(
@@ -238,7 +279,11 @@ export default function ClientSidebar({ active = "/client/dashboard", hideMobile
         where("unreadByRecipient", "==", true)
       );
       unsubscribeAdminInbox = onSnapshot(adminInboxQuery, (snapshot) => {
-        setHasUnreadAdminInbox(!snapshot.empty);
+        const hasUnread = !snapshot.empty;
+        setHasUnreadAdminInbox(hasUnread);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('client_hasUnreadAdminInbox', String(hasUnread));
+        }
       }, () => {});
     });
 

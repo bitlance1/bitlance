@@ -113,13 +113,43 @@ const MORE_MENU_ITEMS = [
 export default function FreelancerSidebar({ active = '/freelancer/dashboard', hideMobileToggle = false }: FreelancerSidebarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
-  const [displayName, setDisplayName] = useState('Freelancer');
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [displayName, setDisplayName] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('freelancer_displayName') || 'Freelancer';
+    }
+    return 'Freelancer';
+  });
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('freelancer_avatarUrl') || null;
+    }
+    return null;
+  });
   const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
-  const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
-  const [hasUnreadContracts, setHasUnreadContracts] = useState(false);
-  const [hasRejectedSubmission, setHasRejectedSubmission] = useState(false);
-  const [hasUnreadAdminInbox, setHasUnreadAdminInbox] = useState(false);
+  const [hasUnreadMessages, setHasUnreadMessages] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('freelancer_hasUnreadMessages') === 'true';
+    }
+    return false;
+  });
+  const [hasUnreadContracts, setHasUnreadContracts] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('freelancer_hasUnreadContracts') === 'true';
+    }
+    return false;
+  });
+  const [hasRejectedSubmission, setHasRejectedSubmission] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('freelancer_hasRejectedSubmission') === 'true';
+    }
+    return false;
+  });
+  const [hasUnreadAdminInbox, setHasUnreadAdminInbox] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('freelancer_hasUnreadAdminInbox') === 'true';
+    }
+    return false;
+  });
   const router = useRouter();
 
   useEffect(() => {
@@ -151,9 +181,19 @@ export default function FreelancerSidebar({ active = '/freelancer/dashboard', hi
           'Freelancer';
         const nextAvatarUrl = freelancerData?.avatarUrl ?? allUsersData?.avatarUrl ?? null;
 
-        setDisplayName(fullName.trim());
+        const finalName = fullName.trim();
+        setDisplayName(finalName);
         setAvatarUrl(nextAvatarUrl);
         setAvatarLoadFailed(false);
+
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('freelancer_displayName', finalName);
+          if (nextAvatarUrl) {
+            localStorage.setItem('freelancer_avatarUrl', nextAvatarUrl);
+          } else {
+            localStorage.removeItem('freelancer_avatarUrl');
+          }
+        }
       } catch {
         setDisplayName(user.displayName ?? 'Freelancer');
         setAvatarUrl(null);
@@ -191,6 +231,9 @@ export default function FreelancerSidebar({ active = '/freelancer/dashboard', hi
           return (data.unread?.[user.uid] ?? 0) > 0;
         });
         setHasUnreadMessages(hasUnread);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('freelancer_hasUnreadMessages', String(hasUnread));
+        }
       }, () => {});
 
       const contractsQuery = query(
@@ -199,7 +242,11 @@ export default function FreelancerSidebar({ active = '/freelancer/dashboard', hi
         where('unreadByFreelancer', '==', true)
       );
       unsubscribeContracts = onSnapshot(contractsQuery, (snapshot) => {
-        setHasUnreadContracts(!snapshot.empty);
+        const hasUnread = !snapshot.empty;
+        setHasUnreadContracts(hasUnread);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('freelancer_hasUnreadContracts', String(hasUnread));
+        }
       }, () => {});
 
       const submittedJobsQuery = query(
@@ -208,7 +255,11 @@ export default function FreelancerSidebar({ active = '/freelancer/dashboard', hi
         where('status', '==', 'rejected')
       );
       unsubscribeSubmittedJobs = onSnapshot(submittedJobsQuery, (snapshot) => {
-        setHasRejectedSubmission(!snapshot.empty);
+        const hasRejected = !snapshot.empty;
+        setHasRejectedSubmission(hasRejected);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('freelancer_hasRejectedSubmission', String(hasRejected));
+        }
       }, () => {});
 
       const adminInboxQuery = query(
@@ -217,7 +268,11 @@ export default function FreelancerSidebar({ active = '/freelancer/dashboard', hi
         where('unreadByRecipient', '==', true)
       );
       unsubscribeAdminInbox = onSnapshot(adminInboxQuery, (snapshot) => {
-        setHasUnreadAdminInbox(!snapshot.empty);
+        const hasUnread = !snapshot.empty;
+        setHasUnreadAdminInbox(hasUnread);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('freelancer_hasUnreadAdminInbox', String(hasUnread));
+        }
       }, () => {});
     });
 
