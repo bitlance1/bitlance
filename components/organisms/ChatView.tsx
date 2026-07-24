@@ -2531,6 +2531,7 @@ interface ChatViewProps {
   viewerRole_disputeRole?: 'client' | 'freelancer';
   isAdminOutreach?: boolean;
   subject?: string;
+  proposalId?: string;
 }
 
 export default function ChatView({
@@ -2569,6 +2570,7 @@ export default function ChatView({
   viewerRole_disputeRole,
   isAdminOutreach = false,
   subject,
+  proposalId,
 }: ChatViewProps) {
   const [newMessage, setNewMessage] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -3016,7 +3018,15 @@ export default function ChatView({
           avatar: 'support',
           isOnline: false
         } : message.sender}
-        subtext={isAdminOutreach ? 'Bitlance Support Team' : undefined}
+        subtext={
+          isAdminOutreach
+            ? 'Bitlance Support Team'
+            : jobTitle
+              ? proposalId
+                ? `Job: ${jobTitle}`
+                : `Job Invitation: ${jobTitle}`
+              : undefined
+        }
         onBack={onBack}
         onViewJobDetails={isAdminOutreach ? undefined : () => {
           if (!jobId) return;
@@ -3137,7 +3147,7 @@ export default function ChatView({
         </div>
       )}
 
-      {!isAdminOutreach && (
+      {!isAdminOutreach && proposalId && (
       <div className="border-b border-[#e8e6e1] bg-white px-3 py-2 sm:px-5">
         <div className="grid grid-cols-2 gap-2">
 

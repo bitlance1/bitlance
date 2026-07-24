@@ -70,7 +70,9 @@ export default function ChatHeader({ sender, onBack, onViewJobDetails, onRaiseDi
 
       <div className="flex flex-col min-w-0">
         <h2 className="font-bold text-[#1a1a1a] truncate text-sm sm:text-base leading-tight">{sender.name}</h2>
-        <span className={`text-xs font-medium leading-none ${subtext ? 'text-gray-400' : sender.isOnline ? 'text-green-500' : 'text-gray-400'}`}>
+        <span className={`text-[11px] font-semibold leading-none truncate max-w-[180px] sm:max-w-[300px] md:max-w-[400px] mt-0.5 inline-block ${
+          subtext ? 'text-gray-500' : sender.isOnline ? 'text-green-500' : 'text-gray-400'
+        }`}>
           {subtext || (sender.isOnline ? 'Online' : 'Offline')}
         </span>
       </div>

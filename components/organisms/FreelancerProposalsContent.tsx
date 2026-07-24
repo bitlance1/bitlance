@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { firebaseAuth, firebaseDb } from "@/lib/firebase";
-import { collection, doc, getDoc, onSnapshot, query, where } from "firebase/firestore";
+import { addDoc, arrayUnion, collection, doc, getDoc, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where } from "firebase/firestore";
+import { sendUserNotification } from "@/lib/notifications";
+import { CheckCircle, XCircle, ArrowRight, Clock, X, MessageSquare, FileText } from "lucide-react";
 
 type Proposal = {
   id: string;
@@ -41,6 +43,9 @@ const isPlaceholderClientName = (value: string) =>
   !value || value.trim().toLowerCase() === "client";
 
 export default function FreelancerProposalsContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [view, setView] = useState<"all" | "accepted" | "pending" | "rejected">("all");
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,6 +53,7 @@ export default function FreelancerProposalsContent() {
   const [selectedProposal, setSelectedProposal] = useState<Proposal | null>(null);
   const [selectedJob, setSelectedJob] = useState<any>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
   const clientNameCache = useRef<Record<string, string>>({});
 
   useEffect(() => {
@@ -142,7 +148,29 @@ export default function FreelancerProposalsContent() {
                 };
               })
             );
-            setProposals(items);
+            // Extract invitation items from proposals collection
+            const proposalInvitations = snapshot.docs
+              .filter((d) => {
+                const data = d.data() as any;
+                return data.isInvitation === true || data.status === "invited";
+              })
+              .map((d) => {
+                const data = d.data() as any;
+                return {
+                  id: d.id,
+                  jobId: data.jobId,
+                  jobTitle: data.jobTitle || "Job Invitation",
+                  clientId: data.clientId,
+                  clientName: data.clientName || "Client",
+                  freelancerId: data.freelancerId,
+                  freelancerName: data.freelancerName,
+                  message: data.message || data.cover || "",
+                  status: data.status === "invited" ? "pending" : (data.status || "pending"),
+                  createdAt: data.createdAt,
+                };
+              });
+
+            setProposals(items.filter((p) => p.status !== "invited"));
             setLoading(false);
           };
           hydrate();
@@ -152,7 +180,10 @@ export default function FreelancerProposalsContent() {
           setErrorMessage("Unable to load proposals.");
         }
       );
-      return () => unsubscribe();
+
+      return () => {
+        unsubscribe();
+      };
     });
     return () => unsubscribeAuth();
   }, []);
@@ -224,7 +255,7 @@ export default function FreelancerProposalsContent() {
         </div>
         <div className="h-5 w-px bg-[#EAE7E2] hidden sm:block" />
         {[
-          { id: "all", label: "All" },
+          { id: "all", label: "All Proposals" },
           { id: "pending", label: "Pending" },
           { id: "accepted", label: "Accepted" },
           { id: "rejected", label: "Rejected" },
@@ -233,7 +264,7 @@ export default function FreelancerProposalsContent() {
             key={tab.id}
             type="button"
             onClick={() => setView(tab.id as any)}
-            className={`rounded-[10px] border px-4 py-2 text-[12px] font-medium transition-all ${
+            className={`rounded-[10px] border px-4 py-2 text-[12px] font-bold transition-all relative ${
               view === tab.id
                 ? "bg-[#F7931A] text-white border-[#F7931A]"
                 : "border-[#EAE7E2] bg-white text-[#6b6762] hover:bg-[#F7F4F0]"
@@ -295,6 +326,8 @@ export default function FreelancerProposalsContent() {
           </div>
         </div>
       )}
+
+
     </section>
   );
 }
@@ -395,3 +428,5 @@ function ProposalCard({ proposal, onClick }: { proposal: Proposal; onClick: () =
     </div>
   );
 }
+
+

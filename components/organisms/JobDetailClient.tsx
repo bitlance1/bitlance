@@ -92,7 +92,6 @@ export default function JobDetailClient({ job, initialClientSidebar }: JobDetail
   const [submitState, setSubmitState] = useState<'idle' | 'submitting' | 'done'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [hasApplied, setHasApplied] = useState(false);
-  const [isSaved, setIsSaved] = useState(false);
   const [clientSidebar, setClientSidebar] = useState<ClientSidebarData>(initialClientSidebar);
   const proposalSectionRef = useRef<HTMLDivElement | null>(null);
 
@@ -122,32 +121,7 @@ export default function JobDetailClient({ job, initialClientSidebar }: JobDetail
     return () => unsubscribe();
   }, [job?.id]);
 
-  useEffect(() => {
-    let unsubscribeSaved: (() => void) | undefined;
 
-    const unsubscribeAuth = firebaseAuth.onAuthStateChanged((user) => {
-      if (!user || !jobId) {
-        if (unsubscribeSaved) unsubscribeSaved();
-        setIsSaved(false);
-        return;
-      }
-
-      const savedQuery = query(
-        collection(firebaseDb, 'saved_jobs'),
-        where('userId', '==', user.uid),
-        where('jobId', '==', jobId)
-      );
-
-      unsubscribeSaved = onSnapshot(savedQuery, (snapshot) => {
-        setIsSaved(!snapshot.empty);
-      });
-    });
-
-    return () => {
-      unsubscribeAuth();
-      if (unsubscribeSaved) unsubscribeSaved();
-    };
-  }, [jobId]);
 
   const budgetLabel =
     job?.budget && job.budget.toLowerCase().includes('sats')
@@ -383,11 +357,19 @@ export default function JobDetailClient({ job, initialClientSidebar }: JobDetail
                           where('freelancerId', '==', user.uid)
                         );
                         const existing = await getDocs(proposalsQuery);
+                        let invitationDoc: any = null;
+
                         if (!existing.empty) {
-                          setHasApplied(true);
-                          setErrorMessage('You already submitted a proposal for this job.');
-                          setSubmitState('idle');
-                          return;
+                          const activeProposals = existing.docs.filter(
+                            (d) => d.data().status !== 'invited' && d.data().status !== 'declined'
+                          );
+                          if (activeProposals.length > 0) {
+                            setHasApplied(true);
+                            setErrorMessage('You already submitted a proposal for this job.');
+                            setSubmitState('idle');
+                            return;
+                          }
+                          invitationDoc = existing.docs.find((d) => d.data().status === 'invited');
                         }
 
                         const allUsersSnap = await getDoc(doc(firebaseDb, 'all_users', user.uid));
@@ -403,7 +385,7 @@ export default function JobDetailClient({ job, initialClientSidebar }: JobDetail
                             'Client'
                             : job.clientName ?? job.clientCompany ?? 'Client';
 
-                        await addDoc(collection(firebaseDb, 'proposals'), {
+                        const proposalPayload = {
                           jobId: job.id,
                           clientId: job.clientId ?? '',
                           jobTitle: job.title ?? 'Job Proposal',
@@ -420,9 +402,37 @@ export default function JobDetailClient({ job, initialClientSidebar }: JobDetail
                           availability: freeData.availability ?? 'Available',
                           rating: freeData.rating ?? 5,
                           status: 'submitted',
+                          isInvitation: false,
                           createdAt: serverTimestamp(),
                           updatedAt: serverTimestamp(),
-                        });
+                        };
+
+                        if (invitationDoc) {
+                          await updateDoc(doc(firebaseDb, 'proposals', invitationDoc.id), proposalPayload);
+                        } else {
+                          await addDoc(collection(firebaseDb, 'proposals'), proposalPayload);
+                        }
+
+                        try {
+                          const { query, collection, where, getDocs, updateDoc, doc } = await import('firebase/firestore');
+                          const invSnap = await getDocs(
+                            query(
+                              collection(firebaseDb, 'job_invitations'),
+                              where('jobId', '==', job.id),
+                              where('freelancerId', '==', user.uid)
+                            )
+                          );
+                          if (!invSnap.empty) {
+                            for (const d of invSnap.docs) {
+                              await updateDoc(doc(firebaseDb, 'job_invitations', d.id), {
+                                status: 'accepted',
+                                updatedAt: serverTimestamp(),
+                              });
+                            }
+                          }
+                        } catch (e) {
+                          console.warn('Fallback job_invitations update failed', e);
+                        }
 
                         await updateDoc(doc(firebaseDb, 'jobs', job.id), {
                           proposals: increment(1),
@@ -484,37 +494,7 @@ export default function JobDetailClient({ job, initialClientSidebar }: JobDetail
                 >
                   {job?.status === 'Closed' ? 'Closed' : hasApplied ? 'Applied' : 'Apply Now'} <Zap className="w-4 h-4 sm:w-5 sm:h-5 fill-current" />
                 </button>
-                <button
-                  onClick={async () => {
-                    const user = firebaseAuth.currentUser;
-                    if (!user) {
-                      setErrorMessage('Please log in to save jobs.');
-                      return;
-                    }
-
-                    const docId = `${user.uid}_${job.id}`;
-                    setErrorMessage('');
-
-                    if (isSaved) {
-                      await deleteDoc(doc(firebaseDb, 'saved_jobs', docId));
-                    } else {
-                      await setDoc(doc(firebaseDb, 'saved_jobs', docId), {
-                        userId: user.uid,
-                        jobId: job.id,
-                        createdAt: serverTimestamp(),
-                        updatedAt: serverTimestamp(),
-                      });
-                    }
-                  }}
-                  className={`w-full py-2.5 sm:py-3 rounded-full font-bold text-sm border flex items-center justify-center gap-2 transition-all shadow-sm ${isSaved
-                      ? 'bg-[#F7931A] text-white border-[#F7931A]'
-                      : 'bg-white hover:bg-gray-100 text-[#1a1a1a] border-[#e0e0e0]'
-                    }`}
-                >
-                  <Bookmark className="w-4 h-4 sm:w-5 sm:h-5" fill={isSaved ? 'currentColor' : 'none'} />
-                  {isSaved ? 'Saved' : 'Save Job'}
-                </button>
-              </div>
+               </div>
 
               <div className="space-y-1 sm:space-y-2 px-1">
                 {[

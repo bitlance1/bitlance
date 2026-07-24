@@ -304,6 +304,9 @@
 
 
 import React, { useState, useEffect, JSX } from 'react';
+import { useRouter } from 'next/navigation';
+import { firebaseDb } from '@/lib/firebase';
+import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
 import {
   FileText,
   File,
@@ -314,6 +317,10 @@ import {
   X,
   Globe,
   Link as LinkIcon,
+  Briefcase,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
 } from 'lucide-react';
 
 interface Attachment {
@@ -340,6 +347,11 @@ interface ChatMessageProps {
     text: string;
     timestamp: string;
     isRead?: boolean;
+    messageType?: string;
+    jobId?: string;
+    jobTitle?: string;
+    invitationId?: string;
+    invitationStatus?: string;
     attachment?: Attachment;
   };
   avatar?: string;
@@ -827,7 +839,39 @@ export default function ChatMessage({
   onInternalLinkClick,
 }: ChatMessageProps) {
   const isMe = message.sender === 'me';
+  const router = useRouter();
   const [linkPreviews, setLinkPreviews] = useState<LinkPreview[]>([]);
+  const [invitationStatus, setInvitationStatus] = useState<string>(message.invitationStatus || 'pending');
+  const [updatingInvite, setUpdatingInvite] = useState(false);
+
+  useEffect(() => {
+    if (message.messageType !== 'job_invitation' || !message.invitationId) return;
+    const unsub = onSnapshot(doc(firebaseDb, 'job_invitations', message.invitationId), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.status) {
+          setInvitationStatus(data.status);
+        }
+      }
+    });
+    return () => unsub();
+  }, [message.messageType, message.invitationId]);
+
+  const handleUpdateInvitation = async (status: 'accepted' | 'declined') => {
+    if (!message.invitationId || updatingInvite) return;
+    try {
+      setUpdatingInvite(true);
+      await updateDoc(doc(firebaseDb, 'job_invitations', message.invitationId), {
+        status,
+        updatedAt: new Date().toISOString(),
+      });
+      setInvitationStatus(status);
+    } catch (err) {
+      console.error('Failed to update invitation status:', err);
+    } finally {
+      setUpdatingInvite(false);
+    }
+  };
 
   // Detect URLs in text and fetch previews
   useEffect(() => {
@@ -885,6 +929,123 @@ export default function ChatMessage({
         {linkPreviews.map((preview, i) => (
           <LinkPreviewCard key={i} preview={preview} isMe={isMe} />
         ))}
+
+        {message.messageType === 'job_invitation' ? (
+          <div className={`mt-3 pt-3 border-t border-dashed text-left w-full ${
+            isMe ? 'border-orange-300/30' : 'border-[#ece7df]'
+          }`}>
+            {/* Main Interactive Invitation Card */}
+            {!isMe ? (
+              /* Freelancer View: White Message bubble background container card */
+              <div className="rounded-xl border border-[#EAE7E2] bg-[#FAF9F6] p-4 space-y-3.5 w-full min-w-0">
+                {/* Header: Job Details */}
+                <div className="flex items-start gap-3 w-full min-w-0">
+                  <div className="w-9 h-9 rounded-lg bg-orange-50 flex items-center justify-center shrink-0 border border-orange-100">
+                    <Briefcase className="w-4.5 h-4.5 text-[#CC7000]" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <span className="inline-block text-[9px] uppercase font-black tracking-widest text-[#CC7000] bg-orange-50 px-2 py-0.5 rounded-[4px] border border-orange-100/50 mb-1">
+                      Job Invitation
+                    </span>
+                    <h4 
+                      onClick={() => router.push(`/job/${message.jobId}`)}
+                      className="text-[13.5px] font-black text-[#1a1a1a] leading-snug hover:text-[#CC7000] cursor-pointer transition-colors break-words"
+                    >
+                      {message.jobTitle || 'Job Post'}
+                    </h4>
+                  </div>
+                </div>
+
+                {/* Footer: Actions / Status */}
+                <div className="pt-3 border-t border-[#EAE7E2]/70 w-full">
+                  {invitationStatus === 'pending' && (
+                    <div className="grid grid-cols-2 gap-2 w-full">
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateInvitation('accepted')}
+                        disabled={updatingInvite}
+                        className="py-2 px-3 rounded-xl bg-[#CC7000] text-white hover:bg-[#A85C00] font-black text-[11px] uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.98] disabled:opacity-50"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                        <span>Accept</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateInvitation('declined')}
+                        disabled={updatingInvite}
+                        className="py-2 px-3 rounded-xl bg-white hover:bg-gray-50 border border-[#EAE7E2] text-[#6b6762] font-bold text-[11px] uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 active:scale-[0.98] disabled:opacity-50"
+                      >
+                        <XCircle className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                        <span>Decline</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {invitationStatus === 'accepted' && (
+                    <div className="rounded-xl bg-[#E6F4EA] border border-emerald-200/80 p-3.5 space-y-2 text-[#137333]">
+                      <div className="flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span className="text-[10px] font-black uppercase tracking-wider">Invitation Accepted!</span>
+                      </div>
+                      <p className="text-[11px] text-[#3c4043] leading-relaxed">
+                        You have accepted this invitation. Submit your proposal to finalize your application.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => router.push(`/job/${message.jobId}`)}
+                        className="w-full py-2 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] uppercase tracking-wider transition-all text-center shadow-sm active:scale-[0.98]"
+                      >
+                        Submit Proposal
+                      </button>
+                    </div>
+                  )}
+
+                  {invitationStatus === 'declined' && (
+                    <div className="rounded-xl bg-[#FCE8E6] border border-rose-200/80 p-3 flex items-center justify-center gap-2 text-[#C5221F] w-full">
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                      <span className="text-[10px] font-black uppercase tracking-wider">Invitation Declined</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              /* Client View: Orange Message bubble background container card */
+              <div className="rounded-xl border border-orange-400/20 bg-orange-800/10 p-4 space-y-3.5 w-full min-w-0">
+                {/* Header: Job Details */}
+                <div className="flex items-start gap-3 w-full min-w-0">
+                  <div className="w-9 h-9 rounded-lg bg-orange-500/20 flex items-center justify-center shrink-0 border border-orange-400/20">
+                    <Briefcase className="w-4.5 h-4.5 text-orange-200" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <span className="inline-block text-[9px] uppercase font-black tracking-widest text-orange-200 bg-orange-500/30 px-2 py-0.5 rounded-[4px] border border-orange-400/20 mb-1">
+                      Sent Job Invitation
+                    </span>
+                    <h4 
+                      onClick={() => router.push(`/job/${message.jobId}`)}
+                      className="text-[13.5px] font-black text-white leading-snug hover:underline cursor-pointer break-words"
+                    >
+                      {message.jobTitle || 'Job Post'}
+                    </h4>
+                  </div>
+                </div>
+
+                {/* Footer: Status */}
+                <div className="pt-3 border-t border-orange-400/20 flex items-center justify-between">
+                  <span className="text-[11px] text-orange-100/90 font-medium">Status:</span>
+                  <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border ${
+                    invitationStatus === 'accepted'
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                      : invitationStatus === 'declined'
+                      ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                      : 'bg-orange-500/20 text-orange-200 border-orange-500/30'
+                  }`}>
+                    {invitationStatus === 'accepted' ? 'Accepted' : invitationStatus === 'declined' ? 'Declined' : 'Pending'}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : null}
 
         {/* Attachment */}
         {message.attachment ? (

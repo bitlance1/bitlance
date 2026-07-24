@@ -53,10 +53,29 @@ interface PageProps {
   params: Promise<{ id: string }>;
 }
 
+function serializeData(obj: any): any {
+  if (obj === null || obj === undefined) return obj;
+  if (typeof obj !== 'object') return obj;
+  if (typeof obj.toMillis === 'function') {
+    return {
+      seconds: obj.seconds,
+      nanoseconds: obj.nanoseconds,
+    };
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(serializeData);
+  }
+  const result: any = {};
+  for (const key of Object.keys(obj)) {
+    result[key] = serializeData(obj[key]);
+  }
+  return result;
+}
+
 async function getJobData(id: string) {
   const snap = await getDoc(doc(firebaseDb, 'jobs', id));
   if (!snap.exists()) return null;
-  return { id: snap.id, ...snap.data() } as any;
+  return serializeData({ id: snap.id, ...snap.data() });
 }
 
 async function getClientSidebarData(job: any) {

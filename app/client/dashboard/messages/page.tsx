@@ -1586,6 +1586,10 @@ interface MessageListItem {
     isRead: boolean;
   };
   unreadCount: number;
+  jobTitle?: string;
+  proposalId?: string;
+  isAdminOutreach?: boolean;
+  subject?: string;
 }
 
 interface ChatMessage {
@@ -1594,6 +1598,11 @@ interface ChatMessage {
   text: string;
   timestamp: string;
   isRead?: boolean;
+  messageType?: string;
+  jobId?: string;
+  jobTitle?: string;
+  invitationId?: string;
+  invitationStatus?: string;
   attachment?: {
     name: string;
     size: string;
@@ -2214,6 +2223,11 @@ export default function ClientMessagesPage() {
           text: data.text ?? "",
           timestamp: formatTimestamp(data.createdAt) || "Now",
           isRead: true,
+          messageType: data.messageType ?? "",
+          jobId: data.jobId ?? "",
+          jobTitle: data.jobTitle ?? "",
+          invitationId: data.invitationId ?? "",
+          invitationStatus: data.invitationStatus ?? "",
           attachment: attachmentData
             ? {
               name: attachmentData.name ?? "Attachment",
@@ -2322,6 +2336,10 @@ export default function ClientMessagesPage() {
             isRead: unreadCount === 0,
           },
           unreadCount,
+          jobTitle: conv.jobTitle,
+          proposalId: conv.proposalId,
+          isAdminOutreach: conv.isAdminOutreach,
+          subject: conv.subject,
         };
       })
       .sort((a, b) => {
@@ -3147,6 +3165,7 @@ export default function ClientMessagesPage() {
                     onOpenContractModal={handleOpenContractModal}
                     jobId={selectedConversation.jobId}
                     jobTitle={selectedConversation.jobTitle}
+                    proposalId={selectedConversation.proposalId}
                     contractId={
                       selectedConversation.jobId && selectedConversation.freelancerId
                         ? `${selectedConversation.jobId}_${selectedConversation.freelancerId}`

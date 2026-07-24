@@ -38,6 +38,10 @@ interface MessageListItem {
     isRead: boolean;
   };
   unreadCount: number;
+  jobTitle?: string;
+  proposalId?: string;
+  isAdminOutreach?: boolean;
+  subject?: string;
 }
 
 interface ChatMessage {
@@ -46,6 +50,11 @@ interface ChatMessage {
   text: string;
   timestamp: string;
   isRead?: boolean;
+  messageType?: string;
+  jobId?: string;
+  jobTitle?: string;
+  invitationId?: string;
+  invitationStatus?: string;
   attachment?: {
     name: string;
     size: string;
@@ -71,6 +80,7 @@ type EscrowMilestone = {
 type Conversation = {
   id: string;
   jobId: string;
+  proposalId?: string;
   jobTitle?: string;
   clientId: string;
   clientName?: string;
@@ -270,6 +280,7 @@ export default function MessagesPage() {
             return {
               id: docSnap.id,
               jobId: data.jobId ?? "",
+              proposalId: data.proposalId || "",
               jobTitle: data.jobTitle ?? "",
               clientId,
               clientName: clientName || "Client",
@@ -418,6 +429,11 @@ export default function MessagesPage() {
           text: data.text ?? "",
           timestamp: formatTimestamp(data.createdAt) || "Now",
           isRead: true,
+          messageType: data.messageType ?? "",
+          jobId: data.jobId ?? "",
+          jobTitle: data.jobTitle ?? "",
+          invitationId: data.invitationId ?? "",
+          invitationStatus: data.invitationStatus ?? "",
           attachment: attachmentData
             ? {
               name: attachmentData.name ?? "Attachment",
@@ -478,6 +494,10 @@ export default function MessagesPage() {
             isRead: unreadCount === 0,
           },
           unreadCount,
+          jobTitle: conv.jobTitle,
+          proposalId: conv.proposalId,
+          isAdminOutreach: conv.isAdminOutreach,
+          subject: conv.subject,
         };
       })
       .sort((a, b) => {
@@ -938,6 +958,7 @@ export default function MessagesPage() {
                   onVerifyPayment={handleVerifyPayment}
                   jobId={selectedConversation.jobId}
                   jobTitle={selectedConversation.jobTitle}
+                  proposalId={selectedConversation.proposalId}
                   contractId={
                     selectedConversation.jobId && selectedConversation.freelancerId
                       ? `${selectedConversation.jobId}_${selectedConversation.freelancerId}`

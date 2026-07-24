@@ -7,6 +7,8 @@ interface Message {
   id: string;
   subject?: string;
   isAdminOutreach?: boolean;
+  jobTitle?: string;
+  proposalId?: string;
   sender: {
     name: string;
     avatar: string;
@@ -156,6 +158,22 @@ export default function MessageItem({
             </span>
           )}
         </div>
+
+        {message.jobTitle ? (
+          <div className="flex items-center gap-1.5 mt-1 text-[11px] font-black text-[#CC7000] truncate max-w-[200px] sm:max-w-[260px] tracking-wide uppercase">
+            <span className="shrink-0 font-extrabold text-[9px] bg-orange-50 border border-orange-200/60 px-1.5 py-0.5 rounded-[4px]">
+              {message.proposalId ? 'Job' : 'Invite'}
+            </span>
+            <span className="truncate">{message.jobTitle}</span>
+          </div>
+        ) : message.isAdminOutreach ? (
+          <div className="flex items-center gap-1.5 mt-1 text-[11px] font-black text-blue-600 truncate max-w-[200px] sm:max-w-[260px] tracking-wide uppercase">
+            <span className="shrink-0 font-extrabold text-[9px] bg-blue-50 border border-blue-200/60 px-1.5 py-0.5 rounded-[4px]">
+              Admin
+            </span>
+            <span className="truncate">Support Thread</span>
+          </div>
+        ) : null}
 
         <p className="text-[13px] text-gray-500 font-medium truncate mt-1 leading-snug max-w-[200px] sm:max-w-[260px]">
           {message.lastMessage.text}

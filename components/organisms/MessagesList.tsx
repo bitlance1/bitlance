@@ -17,6 +17,8 @@ interface Message {
   id: string;
   subject?: string;
   isAdminOutreach?: boolean;
+  jobTitle?: string;
+  proposalId?: string;
   sender: {
     name: string;
     avatar: string;

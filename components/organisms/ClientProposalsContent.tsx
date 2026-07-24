@@ -19,7 +19,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 
-type ProposalStatus = "all" | "submitted" | "accepted" | "rejected";
+type ProposalStatus = "all" | "submitted" | "accepted" | "rejected" | "invited" | "declined";
 
 type ClientJob = {
   id: string;
@@ -76,12 +76,16 @@ const formatDate = (value?: any) => {
 const statusLabel = (status: string) => {
   if (status === "accepted") return "Accepted";
   if (status === "rejected") return "Rejected";
-  return "Pending";
+  if (status === "invited") return "Invited (Pending)";
+  if (status === "declined") return "Declined";
+  return "Pending Review";
 };
 
 const statusClass = (status: string) => {
   if (status === "accepted") return "bg-green-50 text-green-700 border-green-100";
   if (status === "rejected") return "bg-red-50 text-red-700 border-red-100";
+  if (status === "invited") return "bg-blue-50 text-blue-700 border-blue-100";
+  if (status === "declined") return "bg-rose-50 text-rose-700 border-rose-100";
   return "bg-[#FFF7ED] text-[#B45309] border-[#FED7AA]";
 };
 
@@ -148,9 +152,19 @@ export default function ClientProposalsContent() {
     }
   };
 
+  const proposalsListRef = useRef<Proposal[]>([]);
+  const invitationsListRef = useRef<Proposal[]>([]);
+
   useEffect(() => {
     let unsubscribeJobs: (() => void) | undefined;
     let unsubscribeProposals: (() => void) | undefined;
+    let unsubscribeInvitations: (() => void) | undefined;
+
+    const updateCombined = () => {
+      const combined = [...proposalsListRef.current, ...invitationsListRef.current];
+      setProposals(combined);
+      setSelectedProposalId((current) => current || combined[0]?.id || "");
+    };
 
     const unsubscribeAuth = firebaseAuth.onAuthStateChanged(async (user) => {
       if (!user) {
@@ -233,11 +247,67 @@ export default function ClientProposalsContent() {
               };
             })
           );
-          setProposals(items);
+          proposalsListRef.current = items;
+          updateCombined();
           setLoading(false);
-          setSelectedProposalId((current) => current || items[0]?.id || "");
         },
         () => { setLoading(false); setErrorMessage("Unable to load proposals right now."); }
+      );
+
+      unsubscribeInvitations = onSnapshot(
+        query(collection(firebaseDb, "job_invitations"), where("clientId", "==", user.uid)),
+        async (snapshot) => {
+          const items: Proposal[] = await Promise.all(
+            snapshot.docs.map(async (docSnap) => {
+              const data = docSnap.data() as any;
+              const freelancerId = data.freelancerId ?? "";
+              let avatarUrl = "";
+              let rating = 4.5;
+              let reviews = 0;
+              let completedJobs = 0;
+              let location = data.availability ?? "Remote";
+              if (freelancerId) {
+                try {
+                  const [fSnap, aSnap] = await Promise.all([
+                    getDoc(doc(firebaseDb, "freelancers", freelancerId)),
+                    getDoc(doc(firebaseDb, "all_users", freelancerId)),
+                  ]);
+                  const f = fSnap.exists() ? (fSnap.data() as any) : {};
+                  const a = aSnap.exists() ? (aSnap.data() as any) : {};
+                  avatarUrl = f.avatarUrl ?? a.avatarUrl ?? "";
+                  rating = f.rating ?? a.rating ?? 4.5;
+                  reviews = f.reviews ?? a.reviews ?? 0;
+                  completedJobs = f.completedJobs ?? a.completedJobs ?? 0;
+                  location = f.location ?? a.location ?? f.availability ?? a.availability ?? data.availability ?? "Remote";
+                } catch { /* use defaults */ }
+              }
+              return {
+                id: docSnap.id,
+                jobId: data.jobId ?? "",
+                jobTitle: data.jobTitle ?? "Job Invitation",
+                freelancerId,
+                freelancerName: data.freelancerName ?? "Freelancer",
+                freelancerTitle: data.freelancerTitle ?? "Professional",
+                freelancerAvatarUrl: avatarUrl,
+                freelancerRating: rating,
+                freelancerReviews: reviews,
+                freelancerCompletedJobs: completedJobs,
+                freelancerLocation: location,
+                rate: formatSats(data.rate ?? "0"),
+                pricingType: data.pricingType ?? "Fixed Price",
+                hoursPerWeek: data.hoursPerWeek ?? "",
+                cover: data.message ?? data.cover ?? "",
+                availability: data.availability ?? "Available",
+                status: data.status === "pending" || data.status === "invited" ? "invited" : data.status,
+                createdAt: data.createdAt,
+              };
+            })
+          );
+          invitationsListRef.current = items;
+          updateCombined();
+          setLoading(false);
+        },
+        () => { setLoading(false); }
       );
     });
 
@@ -245,6 +315,7 @@ export default function ClientProposalsContent() {
       unsubscribeAuth();
       if (unsubscribeJobs) unsubscribeJobs();
       if (unsubscribeProposals) unsubscribeProposals();
+      if (unsubscribeInvitations) unsubscribeInvitations();
     };
   }, []);
 
@@ -252,7 +323,11 @@ export default function ClientProposalsContent() {
 
   const filteredProposals = useMemo(() => {
     return proposals.filter((proposal) => {
-      if (statusFilter !== "all" && proposal.status !== statusFilter) return false;
+      if (statusFilter !== "all") {
+        if (proposal.status !== statusFilter) return false;
+      } else {
+        if (proposal.status === "invited" || proposal.status === "declined") return false;
+      }
       if (selectedJobId !== "all" && proposal.jobId !== selectedJobId) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
@@ -352,12 +427,15 @@ export default function ClientProposalsContent() {
     } finally { setActionId(""); }
   };
 
-  const stats = useMemo(() => ({
-    all: proposals.length,
-    submitted: proposals.filter((p) => p.status === "submitted").length,
-    accepted: proposals.filter((p) => p.status === "accepted").length,
-    rejected: proposals.filter((p) => p.status === "rejected").length,
-  }), [proposals]);
+  const stats = useMemo(() => {
+    const actualProposals = proposals.filter((p) => p.status !== "invited" && p.status !== "declined");
+    return {
+      all: actualProposals.length,
+      submitted: proposals.filter((p) => p.status === "submitted").length,
+      accepted: proposals.filter((p) => p.status === "accepted").length,
+      rejected: proposals.filter((p) => p.status === "rejected").length,
+    };
+  }, [proposals]);
 
   return (
     <section className="w-full max-w-full space-y-5 overflow-x-hidden">
@@ -449,10 +527,12 @@ export default function ClientProposalsContent() {
         </select>
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as ProposalStatus)}
           className="rounded-[10px] border border-[#EAE7E2] bg-white px-3 py-2 text-[12px] font-medium text-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-orange-200">
-          <option value="all">All Status</option>
-          <option value="submitted">Pending</option>
-          <option value="accepted">Accepted</option>
+          <option value="all">All Proposals</option>
+          <option value="submitted">Awaiting Review</option>
+          <option value="accepted">Accepted / Hired</option>
           <option value="rejected">Rejected</option>
+          <option value="invited">Pending Invitations</option>
+          <option value="declined">Declined Invitations</option>
         </select>
         <select defaultValue="newest" onChange={() => {}}
           className="rounded-[10px] border border-[#EAE7E2] bg-white px-3 py-2 text-[12px] font-medium text-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-orange-200">
@@ -716,9 +796,9 @@ export default function ClientProposalsContent() {
             </div>
             <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
               <Button size="sm" variant="outline" className="rounded-full" onClick={() => messageFreelancer(selectedProposal)} disabled={actionId === selectedProposal.id}>Message</Button>
-              <Button size="sm" variant="outline" className="rounded-full border-red-200 text-red-600 hover:bg-red-50" onClick={() => rejectProposal(selectedProposal)} disabled={selectedProposal.status === "rejected" || actionId === selectedProposal.id}>Reject</Button>
-              <Button size="sm" className="rounded-full" onClick={() => acceptProposal(selectedProposal)} disabled={selectedProposal.status === "accepted" || actionId === selectedProposal.id}>
-                {actionId === selectedProposal.id ? "Working..." : "Accept Proposal"}
+              <Button size="sm" variant="outline" className="rounded-full border-red-200 text-red-600 hover:bg-red-50" onClick={() => rejectProposal(selectedProposal)} disabled={selectedProposal.status === "rejected" || selectedProposal.status === "invited" || selectedProposal.status === "declined" || actionId === selectedProposal.id}>Reject</Button>
+              <Button size="sm" className="rounded-full" onClick={() => acceptProposal(selectedProposal)} disabled={selectedProposal.status === "accepted" || selectedProposal.status === "invited" || selectedProposal.status === "declined" || actionId === selectedProposal.id}>
+                {actionId === selectedProposal.id ? "Working..." : selectedProposal.status === "invited" ? "Awaiting Proposal" : selectedProposal.status === "declined" ? "Invitation Declined" : "Accept Proposal"}
               </Button>
             </div>
           </div>

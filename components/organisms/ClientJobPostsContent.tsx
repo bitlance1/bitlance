@@ -305,20 +305,22 @@ export default function ClientJobPostsContent() {
     const unsubscribe = onSnapshot(
       proposalsQuery,
       (snapshot) => {
-        const items = snapshot.docs.map((docSnap) => {
-          const data = docSnap.data() as any;
-          return {
-            id: docSnap.id,
-            freelancerId: data.freelancerId ?? "",
-            name: data.freelancerName ?? "Freelancer",
-            title: data.freelancerTitle ?? "Professional",
-            rate: data.rate ?? "-",
-            cover: data.cover ?? "",
-            rating: typeof data.rating === "number" ? data.rating : 5,
-            availability: data.availability ?? "Available",
-            status: data.status ?? "submitted",
-          };
-        });
+        const items = snapshot.docs
+          .map((docSnap) => {
+            const data = docSnap.data() as any;
+            return {
+              id: docSnap.id,
+              freelancerId: data.freelancerId ?? "",
+              name: data.freelancerName ?? "Freelancer",
+              title: data.freelancerTitle ?? "Professional",
+              rate: data.rate ?? "-",
+              cover: data.cover ?? "",
+              rating: typeof data.rating === "number" ? data.rating : 5,
+              availability: data.availability ?? "Available",
+              status: data.status ?? "submitted",
+            };
+          })
+          .filter((item) => item.status !== "invited" && item.status !== "declined");
         setProposals(items);
         setProposalsLoading(false);
       },
@@ -354,7 +356,11 @@ export default function ClientJobPostsContent() {
       if (jobAvatars[job.id]) return; // already fetched
       const q = query(collection(firebaseDb, "proposals"), where("jobId", "==", job.id));
       const unsub = onSnapshot(q, async (snap) => {
-        const top = snap.docs.slice(0, 4);
+        const nonInvitedDocs = snap.docs.filter((d) => {
+          const status = d.data().status;
+          return status !== "invited" && status !== "declined";
+        });
+        const top = nonInvitedDocs.slice(0, 4);
         const avatars = await Promise.all(
           top.map(async (d) => {
             const data = d.data() as any;

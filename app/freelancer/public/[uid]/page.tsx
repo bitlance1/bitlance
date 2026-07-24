@@ -7,10 +7,12 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useParams, useRouter } from "next/navigation";
-import { MapPin, Calendar, BadgeCheck, ArrowLeft } from "lucide-react";
-import { useEffect, useState } from "react";
-import { firebaseDb } from "@/lib/firebase";
-import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { MapPin, Calendar, BadgeCheck, ArrowLeft, X, Send, CheckCircle2, AlertCircle, Briefcase, ChevronDown, ChevronUp, Check, Search } from "lucide-react";
+import { useEffect, useState, useMemo } from "react";
+import { firebaseAuth, firebaseDb } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import { doc, getDoc, collection, query, where, getDocs, addDoc, updateDoc, arrayUnion, serverTimestamp, setDoc, increment } from "firebase/firestore";
+import { sendUserNotification } from "@/lib/notifications";
 
 export default function FreelancerPublicProfilePage() {
   const params = useParams<{ uid: string }>();
@@ -56,6 +58,246 @@ export default function FreelancerPublicProfilePage() {
       projectLink?: string;
     }>,
   });
+
+  // ── Auth & Role State ──────────────────────────────────────────────────────
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [isClientUser, setIsClientUser] = useState<boolean>(false);
+
+  // ── Invite Modal State ─────────────────────────────────────────────────────
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [clientJobs, setClientJobs] = useState<Array<{ id: string; title: string; budget?: string }>>([]);
+  const [loadingJobs, setLoadingJobs] = useState(false);
+  const [selectedJobId, setSelectedJobId] = useState("");
+  const [inviteNote, setInviteNote] = useState("");
+  const [sendingInvite, setSendingInvite] = useState(false);
+  const [inviteSuccessMsg, setInviteSuccessMsg] = useState("");
+  const [inviteErrorMsg, setInviteErrorMsg] = useState("");
+
+  // ── Searchable Job Picker Dropdown State ─────────────────────────────────
+  const [jobSearchQuery, setJobSearchQuery] = useState("");
+  const [isJobDropdownOpen, setIsJobDropdownOpen] = useState(false);
+
+  const filteredClientJobs = useMemo(() => {
+    if (!jobSearchQuery.trim()) return clientJobs;
+    const q = jobSearchQuery.toLowerCase().trim();
+    return clientJobs.filter(
+      (j) => j.title.toLowerCase().includes(q) || (j.budget && j.budget.toLowerCase().includes(q))
+    );
+  }, [clientJobs, jobSearchQuery]);
+
+  // ── Auth & Role Observer ───────────────────────────────────────────────────
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => {
+      setCurrentUser(user);
+      if (user) {
+        try {
+          const userSnap = await getDoc(doc(firebaseDb, "all_users", user.uid));
+          if (userSnap.exists()) {
+            const uData = userSnap.data() as any;
+            const role = String(uData.role ?? uData.userType ?? "").toLowerCase();
+            setIsClientUser(role === "client");
+          } else {
+            const clientSnap = await getDoc(doc(firebaseDb, "clients", user.uid));
+            setIsClientUser(clientSnap.exists());
+          }
+        } catch {
+          setIsClientUser(false);
+        }
+      } else {
+        setIsClientUser(false);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // ── Handle Open Invite Modal ───────────────────────────────────────────────
+  const handleOpenInviteModal = async () => {
+    if (!currentUser) {
+      router.push(`/login?redirect=/freelancer/public/${uid}`);
+      return;
+    }
+
+    if (!isClientUser) {
+      setInviteErrorMsg("Only client accounts can send job invitations. Please log in with a client account.");
+      setIsInviteModalOpen(true);
+      return;
+    }
+
+    setIsInviteModalOpen(true);
+    setLoadingJobs(true);
+    setInviteErrorMsg("");
+    setInviteSuccessMsg("");
+
+    try {
+      const q = query(
+        collection(firebaseDb, "jobs"),
+        where("clientId", "==", currentUser.uid)
+      );
+      const snap = await getDocs(q);
+      const jobsList = snap.docs
+        .map((d) => {
+          const data = d.data() as any;
+          const status = String(data.status ?? "").toLowerCase();
+          if (status === "closed" || status === "paused" || status === "completed") return null;
+          return {
+            id: d.id,
+            title: (data.title as string) || "Untitled Job",
+            budget: (data.budget as string) || "",
+          };
+        })
+        .filter(Boolean) as Array<{ id: string; title: string; budget?: string }>;
+
+      setClientJobs(jobsList);
+      if (jobsList.length > 0) {
+        setSelectedJobId(jobsList[0].id);
+      }
+    } catch (err) {
+      console.error("Failed to load client jobs:", err);
+      setInviteErrorMsg("Failed to load your open job posts.");
+    } finally {
+      setLoadingJobs(false);
+    }
+  };
+
+  // ── Handle Send Invitation ─────────────────────────────────────────────────
+  const handleSendInvite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedJobId) {
+      setInviteErrorMsg("Please select an open job post to send an invitation.");
+      return;
+    }
+
+    setSendingInvite(true);
+    setInviteErrorMsg("");
+    setInviteSuccessMsg("");
+
+    try {
+      const selectedJob = clientJobs.find((j) => j.id === selectedJobId);
+      const jobTitle = selectedJob?.title || "Job Post";
+      const targetName = fullName || "Freelancer";
+
+      const messageText = inviteNote.trim() || `Hi ${targetName}, I saw your profile and would like to invite you to apply for "${jobTitle}".`;
+
+      // Fetch client details from all_users for the conversation meta
+      let clientName = currentUser.displayName || currentUser.email || "Client";
+      let clientAvatar = currentUser.photoURL || "";
+      try {
+        const clientUserSnap = await getDoc(doc(firebaseDb, "all_users", currentUser.uid));
+        if (clientUserSnap.exists()) {
+          const clientData = clientUserSnap.data();
+          if (clientData.fullName) clientName = clientData.fullName;
+          if (clientData.avatarUrl) clientAvatar = clientData.avatarUrl;
+        }
+      } catch (e) {
+        console.warn("Could not load client details from all_users:", e);
+      }
+
+      const invitationPayload = {
+        isInvitation: true,
+        jobId: selectedJobId,
+        jobTitle,
+        clientId: currentUser.uid,
+        clientName,
+        freelancerId: uid,
+        freelancerName: targetName,
+        message: messageText,
+        cover: messageText,
+        status: "pending",
+        createdAt: serverTimestamp(),
+      };
+
+      // 1. Primary: Save exclusively to job_invitations collection
+      const inviteRef = await addDoc(collection(firebaseDb, "job_invitations"), invitationPayload);
+
+      // 2. Chat Conversation Creation & Message Send
+      try {
+        const conversationId = `${selectedJobId}_${uid}`;
+        const conversationRef = doc(firebaseDb, "conversations", conversationId);
+        const conversationSnap = await getDoc(conversationRef);
+        if (!conversationSnap.exists()) {
+          await setDoc(conversationRef, {
+            jobId: selectedJobId,
+            jobTitle,
+            clientId: currentUser.uid,
+            clientName,
+            clientAvatarUrl: clientAvatar,
+            freelancerId: uid,
+            freelancerName: targetName,
+            freelancerAvatarUrl: profile.avatarUrl || "",
+            paymentTotalAmountSats: 0,
+            paymentStatus: "unfunded",
+            createdBy: "client",
+            canFreelancerMessage: true,
+            unread: {
+              [currentUser.uid]: 0,
+              [uid]: 1,
+            },
+            lastMessage: {
+              text: messageText,
+              senderId: currentUser.uid,
+              createdAt: serverTimestamp(),
+            },
+            updatedAt: serverTimestamp(),
+            createdAt: serverTimestamp(),
+          });
+        } else {
+          await updateDoc(conversationRef, {
+            [`unread.${uid}`]: increment(1),
+            lastMessage: {
+              text: messageText,
+              senderId: currentUser.uid,
+              createdAt: serverTimestamp(),
+            },
+            updatedAt: serverTimestamp(),
+          });
+        }
+
+        // Send the interactive job invitation message
+        await addDoc(collection(firebaseDb, "conversations", conversationId, "messages"), {
+          senderId: currentUser.uid,
+          senderRole: "client",
+          text: messageText,
+          messageType: "job_invitation",
+          jobId: selectedJobId,
+          jobTitle,
+          invitationId: inviteRef.id,
+          invitationStatus: "pending",
+          createdAt: serverTimestamp(),
+        });
+      } catch (err) {
+        console.error("Error creating conversation/message for invitation:", err);
+      }
+
+      // 3. Also record invited freelancer ID on jobs document
+      try {
+        await updateDoc(doc(firebaseDb, "jobs", selectedJobId), {
+          invitedFreelancers: arrayUnion(uid),
+        });
+      } catch (e) {
+        console.warn("jobs update fallback skipped", e);
+      }
+
+      // 4. Trigger email / in-app notification to freelancer
+      await sendUserNotification({
+        userId: uid,
+        title: `Job Invitation: ${jobTitle}`,
+        body: `${clientName} invited you to apply for "${jobTitle}". Review the details on your proposals dashboard!`,
+        url: `/freelancer/dashboard/proposals?tab=invitations`,
+      });
+
+      setInviteSuccessMsg(`Invitation sent successfully to ${targetName}!`);
+      setTimeout(() => {
+        setIsInviteModalOpen(false);
+        setInviteNote("");
+        setInviteSuccessMsg("");
+      }, 2000);
+    } catch (err: any) {
+      console.error("Failed to send invitation:", err);
+      setInviteErrorMsg(err?.message || "Failed to send invitation. Please try again.");
+    } finally {
+      setSendingInvite(false);
+    }
+  };
 
   // ── Load profile by UID from URL ───────────────────────────────────────────
   useEffect(() => {
@@ -400,13 +642,19 @@ export default function FreelancerPublicProfilePage() {
                   </div>
                 </div>
 
-                {/* Hire Now */}
+                {/* Hire Now - temporarily disabled */}
+                {/* 
                 <button className="w-full py-3 rounded-[10px] bg-[#F7931A] hover:bg-[#E07D0A] text-[13px] sm:text-[14px] font-black text-white tracking-wide transition-colors">
                   Hire Now
                 </button>
+                */}
 
                 {/* Invite to Job */}
-                <button className="w-full py-3 rounded-[10px] bg-[#EDEAE5] hover:bg-[#E0DDD8] text-[13px] sm:text-[14px] font-black text-[#1a1a1a] tracking-wide transition-colors border border-[#DDD8D0]">
+                <button
+                  onClick={handleOpenInviteModal}
+                  className="w-full py-3 rounded-[10px] bg-[#F7931A] hover:bg-[#E07D0A] text-[13px] sm:text-[14px] font-black text-white tracking-wide transition-colors shadow-sm flex items-center justify-center gap-2"
+                >
+                  <Send size={15} />
                   Invite to Job
                 </button>
 
@@ -615,11 +863,257 @@ export default function FreelancerPublicProfilePage() {
               )}
             </div>
           </div>
-          {/* END PORTFOLIO SECTION ─────────────────────────────────── */}
+      {/* ── Invite To Job Modal Overlay ────────────────────────────────────── */}
+      {isInviteModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-[20px] border border-[#EAE7E2] shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+            
+            {/* Modal Header */}
+            <div className="px-6 py-5 border-b border-[#F0EDE8] flex items-center justify-between bg-[#FCF9F8]">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-[#F7931A]/10 flex items-center justify-center text-[#F7931A]">
+                  <Send size={18} />
+                </div>
+                <div>
+                  <h3 className="text-[16px] font-black text-[#1a1a1a] leading-tight">
+                    Invite to Job
+                  </h3>
+                  <p className="text-[12px] text-[#777]">
+                    Send a job invitation to <span className="font-bold text-[#1a1a1a]">{fullName}</span>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsInviteModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-[#EAE7E2]/50 hover:bg-[#EAE7E2] text-[#666] flex items-center justify-center transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-4">
+
+              {/* Success Alert */}
+              {inviteSuccessMsg && (
+                <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-[12px] flex items-center gap-2.5 text-emerald-800 text-[13px] font-medium">
+                  <CheckCircle2 size={18} className="text-emerald-600 flex-shrink-0" />
+                  <span>{inviteSuccessMsg}</span>
+                </div>
+              )}
+
+              {/* Error Alert */}
+              {inviteErrorMsg && (
+                <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-[12px] flex items-center gap-2.5 text-rose-800 text-[13px] font-medium">
+                  <AlertCircle size={18} className="text-rose-600 flex-shrink-0" />
+                  <span>{inviteErrorMsg}</span>
+                </div>
+              )}
+
+              {loadingJobs ? (
+                <div className="py-12 flex flex-col items-center justify-center gap-3">
+                  <div className="h-7 w-7 rounded-full border-2 border-[#F7931A] border-t-transparent animate-spin" />
+                  <p className="text-[13px] text-[#888] font-medium">Loading your active job posts...</p>
+                </div>
+              ) : !isClientUser && currentUser ? (
+                <div className="py-6 text-center space-y-4">
+                  <p className="text-[14px] text-[#444]">
+                    You are currently logged in with a <span className="font-bold text-[#1a1a1a]">Freelancer</span> account.
+                  </p>
+                  <p className="text-[12px] text-[#888]">
+                    Please switch or log in with a Client account to invite freelancers to job posts.
+                  </p>
+                  <button
+                    onClick={() => router.push("/login")}
+                    className="px-6 py-2.5 rounded-[10px] bg-[#1a1a1a] text-white text-[13px] font-bold hover:bg-black transition-colors"
+                  >
+                    Switch to Client Account
+                  </button>
+                </div>
+              ) : clientJobs.length === 0 ? (
+                <div className="py-8 text-center space-y-4">
+                  <div className="w-12 h-12 rounded-full bg-[#FCF9F8] border border-[#EAE7E2] mx-auto flex items-center justify-center text-[#999]">
+                    <Briefcase size={22} />
+                  </div>
+                  <div>
+                    <p className="text-[15px] font-bold text-[#1a1a1a]">No Active Open Job Posts</p>
+                    <p className="text-[13px] text-[#777] max-w-xs mx-auto mt-1">
+                      You need an active job post to invite freelancers to apply.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => router.push("/client/dashboard/job-posts?action=new")}
+                    className="px-6 py-2.5 rounded-[10px] bg-[#F7931A] text-white text-[13px] font-black uppercase tracking-wide hover:bg-[#E07D0A] transition-colors"
+                  >
+                    Post a New Job Now
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleSendInvite} className="space-y-4">
+                  {/* Searchable Custom Job Select Dropdown */}
+                  <div className="relative">
+                    <label className="block text-[11px] font-black uppercase tracking-[0.08em] text-[#666] mb-1.5">
+                      Select Open Job Post <span className="text-rose-500">*</span>
+                    </label>
+
+                    {/* Trigger Button */}
+                    <div
+                      onClick={() => setIsJobDropdownOpen((prev) => !prev)}
+                      className={`w-full px-4 py-3 rounded-[12px] bg-[#FCF9F8] border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                        isJobDropdownOpen
+                          ? "border-[#F7931A] ring-2 ring-[#F7931A]/10 shadow-sm"
+                          : "border-[#EDEAE5] hover:border-[#CBD5E1]"
+                      }`}
+                    >
+                      {(() => {
+                        const activeJob = clientJobs.find((j) => j.id === selectedJobId) || clientJobs[0];
+                        return activeJob ? (
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                            <Briefcase size={16} className="text-[#F7931A] flex-shrink-0" />
+                            <span className="text-[13px] font-bold text-[#1a1a1a] truncate">
+                              {activeJob.title}
+                            </span>
+                            {activeJob.budget && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-[#F7931A]/10 text-[#F7931A] flex-shrink-0">
+                                {activeJob.budget.includes("sats") ? activeJob.budget : `${activeJob.budget} sats`}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-[13px] text-[#999]">Select an open job...</span>
+                        );
+                      })()}
+                      {isJobDropdownOpen ? (
+                        <ChevronUp size={16} className="text-[#666] flex-shrink-0" />
+                      ) : (
+                        <ChevronDown size={16} className="text-[#666] flex-shrink-0" />
+                      )}
+                    </div>
+
+                    {/* Floating Popover Dropdown Menu */}
+                    {isJobDropdownOpen && (
+                      <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 bg-white border border-[#EDEAE5] rounded-[14px] shadow-2xl p-2.5 space-y-2 animate-in fade-in-50 zoom-in-95 duration-150">
+                        {/* Search Input inside Dropdown */}
+                        <div className="relative">
+                          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#999]" />
+                          <input
+                            type="text"
+                            value={jobSearchQuery}
+                            onChange={(e) => setJobSearchQuery(e.target.value)}
+                            placeholder="Search job title or budget..."
+                            className="w-full pl-8 pr-7 py-2 rounded-[8px] bg-[#FCF9F8] border border-[#EDEAE5] text-[12px] text-[#1a1a1a] placeholder-[#999] focus:outline-none focus:border-[#F7931A]"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          {jobSearchQuery && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setJobSearchQuery("");
+                              }}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#999] hover:text-[#1a1a1a]"
+                            >
+                              <X size={12} />
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Jobs Options List */}
+                        <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin">
+                          {filteredClientJobs.length === 0 ? (
+                            <div className="py-4 text-center text-[12px] text-[#999]">
+                              No matching job posts found
+                            </div>
+                          ) : (
+                            filteredClientJobs.map((job: any) => {
+                              const isSelected = job.id === selectedJobId;
+                              return (
+                                <div
+                                  key={job.id}
+                                  onClick={() => {
+                                    setSelectedJobId(job.id);
+                                    setIsJobDropdownOpen(false);
+                                    setJobSearchQuery("");
+                                  }}
+                                  className={`w-full p-2.5 rounded-[10px] text-left cursor-pointer transition-all flex items-center justify-between gap-3 ${
+                                    isSelected
+                                      ? "bg-[#FFF9F2] border border-[#F7931A]/40 text-[#1a1a1a]"
+                                      : "hover:bg-[#FCF9F8] border border-transparent text-[#444]"
+                                  }`}
+                                >
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-[13px] font-bold text-[#1a1a1a] truncate leading-snug">
+                                      {job.title}
+                                    </p>
+                                    {job.budget && (
+                                      <span className="text-[10px] font-semibold text-[#8C4F00]">
+                                        {job.budget.includes("sats") ? job.budget : `${job.budget} sats`}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {isSelected && (
+                                    <Check size={16} className="text-[#F7931A] flex-shrink-0" />
+                                  )}
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Personal Note */}
+                  <div>
+                    <label className="block text-[11px] font-black uppercase tracking-[0.08em] text-[#666] mb-1.5">
+                      Personal Note to Freelancer
+                    </label>
+                    <textarea
+                      rows={4}
+                      value={inviteNote}
+                      onChange={(e) => setInviteNote(e.target.value)}
+                      placeholder={`Hi ${fullName}, I checked out your profile and work history. I'd love to invite you to apply for our project...`}
+                      className="w-full px-3.5 py-3 rounded-[10px] bg-[#FCF9F8] border border-[#EDEAE5] text-[13px] text-[#1a1a1a] placeholder-[#AAA] focus:outline-none focus:border-[#F7931A] transition-colors resize-none leading-relaxed"
+                    />
+                  </div>
+
+                  {/* Actions */}
+                  <div className="pt-2 flex items-center justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setIsInviteModalOpen(false)}
+                      className="px-5 py-2.5 rounded-[10px] text-[13px] font-bold text-[#666] hover:bg-[#EAE7E2]/50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={sendingInvite || !!inviteSuccessMsg}
+                      className="px-6 py-2.5 rounded-[10px] bg-[#F7931A] hover:bg-[#E07D0A] disabled:opacity-50 text-white text-[13px] font-black uppercase tracking-wide transition-colors flex items-center gap-2 shadow-sm"
+                    >
+                      {sendingInvite ? (
+                        <>
+                          <div className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                          <span>Sending...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send size={14} />
+                          <span>Send Invitation</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+            </div>
+
+          </div>
+        </div>
+      )}
 
         </div>
-        {/* END CONTAINER ─────────────────────────────────────────────── */}
-
       </div>
     </div>
   );
